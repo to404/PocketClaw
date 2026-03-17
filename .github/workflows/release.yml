@@ -11,15 +11,16 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: macos-14
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      skip: ${{ steps.v.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Check version
-        id: version
+      - id: v
         run: |
           VERSION=$(cat portable/version.txt | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -29,26 +30,29 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
+  build-mac:
+    needs: check-version
+    if: needs.check-version.outputs.skip == 'false'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
-        if: steps.version.outputs.skip == 'false'
         with:
           version: 10
 
       - uses: actions/setup-node@v4
-        if: steps.version.outputs.skip == 'false'
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
 
       - uses: actions/setup-go@v5
-        if: steps.version.outputs.skip == 'false'
         with:
           go-version: "1.24"
           cache: false
 
       - name: Build UI
-        if: steps.version.outputs.skip == 'false'
         working-directory: ui
         run: |
           pnpm install
@@ -57,7 +61,6 @@ jobs:
           cp -R dist/* ../portable/app/ui/dist/
 
       - name: Download Node.js runtimes
-        if: steps.version.outputs.skip == 'false'
         run: |
           NODE_VER="v22.14.0"
           mkdir -p portable/app/runtime
@@ -68,55 +71,141 @@ jobs:
           curl -fsSL "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-darwin-x64.tar.xz" | tar -xJ
           mv "node-$NODE_VER-darwin-x64" portable/app/runtime/node-darwin-x64
 
-          curl -fsSL "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-win-x64.zip" -o node-win.zip
-          unzip -q node-win.zip
-          mv "node-$NODE_VER-win-x64" portable/app/runtime/node-win-x64
-
-          echo "Runtimes downloaded:"
-          du -sh portable/app/runtime/*/
-
       - name: Install OpenClaw
-        if: steps.version.outputs.skip == 'false'
         run: |
           mkdir -p portable/app/core
           cd portable/app/core
           npm init -y
           npm install openclaw
-          echo "OpenClaw installed: $(du -sh node_modules/)"
 
-      - name: Build launchers
-        if: steps.version.outputs.skip == 'false'
+      - name: Build Mac launchers
         working-directory: launcher
         run: |
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "../portable/启动 PocketClaw.exe" main.go
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64" main.go
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-x64" main.go
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" \
+            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64" main.go
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" \
+            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-x64" main.go
 
           chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/launcher"
           chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64"
           chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-x64"
 
-      - name: Create packages
-        if: steps.version.outputs.skip == 'false'
+      - name: Create Mac package
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          EXCL="--exclude=portable/data/.openclaw/credentials --exclude=portable/data/memory/*.md --exclude=portable/data/backups/*"
+          VERSION="${{ needs.check-version.outputs.version }}"
+          # Remove Windows files from Mac package
+          rm -f "portable/启动 PocketClaw.exe" 2>/dev/null || true
+          rm -f portable/Windows-Start.bat portable/Windows-Menu.bat 2>/dev/null || true
+          tar -czf "PocketClaw-v${VERSION}-mac.tar.gz" \
+            --exclude='portable/data/.openclaw/credentials' \
+            --exclude='portable/data/memory/*.md' \
+            --exclude='portable/data/backups/*' \
+            portable/
 
-          # Full package: all runtimes + OpenClaw + UI + launchers
-          tar -czf "PocketClaw-v${VERSION}-full.tar.gz" $EXCL portable/
-          echo "Full package: $(du -h PocketClaw-v${VERSION}-full.tar.gz | cut -f1)"
-
-          # Update package: UI + system scripts only (lightweight)
+      - name: Create update package
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
           tar -czf "PocketClaw-v${VERSION}-update.tar.gz" \
             -C portable app/ui/ system/ version.txt
-          echo "Update package: $(du -h PocketClaw-v${VERSION}-update.tar.gz | cut -f1)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-mac
+          path: PocketClaw-*.tar.gz
+
+  build-windows:
+    needs: check-version
+    if: needs.check-version.outputs.skip == 'false'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Build UI
+        shell: bash
+        working-directory: ui
+        run: |
+          pnpm install
+          pnpm build
+          mkdir -p ../portable/app/ui/dist
+          cp -R dist/* ../portable/app/ui/dist/
+
+      - name: Download Node.js runtime
+        shell: bash
+        run: |
+          NODE_VER="v22.14.0"
+          mkdir -p portable/app/runtime
+          curl -fsSL "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-win-x64.zip" -o node-win.zip
+          unzip -q node-win.zip
+          mv "node-$NODE_VER-win-x64" portable/app/runtime/node-win-x64
+
+      - name: Install OpenClaw
+        shell: bash
+        run: |
+          mkdir -p portable/app/core
+          cd portable/app/core
+          npm init -y
+          npm install openclaw
+
+      - name: Build Windows launcher
+        shell: bash
+        working-directory: launcher
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" \
+            -o "../portable/启动 PocketClaw.exe" main.go
+
+      - name: Create Windows package
+        shell: bash
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          # Remove Mac files from Windows package
+          rm -rf "portable/启动 PocketClaw.app" 2>/dev/null || true
+          rm -f portable/Mac-Start.command portable/Mac-Menu.command 2>/dev/null || true
+          tar -czf "PocketClaw-v${VERSION}-windows.tar.gz" \
+            --exclude='portable/data/.openclaw/credentials' \
+            --exclude='portable/data/memory/*.md' \
+            --exclude='portable/data/backups/*' \
+            portable/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: PocketClaw-*.tar.gz
+
+  release:
+    needs: [check-version, build-mac, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: List packages
+        run: ls -lh PocketClaw-*.tar.gz
 
       - name: Create tag and release
-        if: steps.version.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="v${{ steps.version.outputs.version }}"
+          VERSION="v${{ needs.check-version.outputs.version }}"
           git tag -a "$VERSION" -m "Release $VERSION"
           git push origin "$VERSION"
 
