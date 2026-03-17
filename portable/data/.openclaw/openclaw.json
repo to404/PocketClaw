@@ -1,0 +1,15 @@
+{
+  "agent": {
+    "model": "deepseek/deepseek-chat"
+  },
+  "gateway": {
+    "port": 18789,
+    "host": "127.0.0.1"
+  },
+  "webchat": {
+    "enabled": true
+  },
+  "log": {
+    "level": "info"
+  }
+}
