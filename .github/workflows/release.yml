@@ -62,7 +62,7 @@ jobs:
 
       - name: Download Node.js runtimes
         run: |
-          NODE_VER="v22.14.0"
+          NODE_VER="v22.22.1"
           mkdir -p portable/app/runtime
 
           curl -fsSL "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-darwin-arm64.tar.xz" | tar -xJ
@@ -148,7 +148,7 @@ jobs:
       - name: Download Node.js runtime
         shell: bash
         run: |
-          NODE_VER="v22.14.0"
+          NODE_VER="v22.22.1"
           mkdir -p portable/app/runtime
           curl -fsSL "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-win-x64.zip" -o node-win.zip
           unzip -q node-win.zip

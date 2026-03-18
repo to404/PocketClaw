@@ -6,7 +6,7 @@ set "SCRIPT_DIR=%~dp0"
 set "BASE_DIR=%SCRIPT_DIR%..\"
 set "RUNTIME_DIR=%BASE_DIR%app\runtime"
 set "CORE_DIR=%BASE_DIR%app\core"
-set "NODE_VERSION=22.14.0"
+set "NODE_VERSION=22.22.1"
 
 echo [PocketClaw Setup] === PocketClaw Setup ===
 

@@ -6,7 +6,7 @@ BASE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RUNTIME_DIR="$BASE_DIR/app/runtime"
 CORE_DIR="$BASE_DIR/app/core"
 
-NODE_VERSION="22.14.0"
+NODE_VERSION="22.22.1"
 NODE_BASE_URL="https://nodejs.org/dist/v${NODE_VERSION}"
 
 log() { echo "[PocketClaw Setup] $*"; }
