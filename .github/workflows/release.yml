@@ -82,9 +82,9 @@ jobs:
         working-directory: launcher
         run: |
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" \
-            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64" main.go
+            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64" .
           GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" \
-            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-x64" main.go
+            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-x64" .
 
           chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/launcher"
           chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64"
@@ -168,7 +168,7 @@ jobs:
         working-directory: launcher
         run: |
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" \
-            -o "../portable/启动 PocketClaw.exe" main.go
+            -o "../portable/启动 PocketClaw.exe" .
 
       - name: Create Windows package
         shell: bash
