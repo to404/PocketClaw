@@ -8,7 +8,7 @@ export function Onboarding() {
   const navigate = useNavigate();
   const { updateConfig } = useConfig();
   const [step, setStep] = useState(1);
-  const [model, setModel] = useState("minimax/MiniMax-M2.5");
+  const [model, setModel] = useState("minimax/MiniMax-M2.7");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

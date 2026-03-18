@@ -345,9 +345,30 @@ func syncConfigToOpenClaw() {
 		}
 	}
 
-	// API keys go through auth-profiles.json only (writeAuthProfiles).
-	// Do NOT write to models.providers — incomplete entries fail Zod strict validation
-	// and cause config reload to be skipped entirely.
+	// Override MiniMax base URL to China endpoint (api.minimaxi.com).
+	// OpenClaw defaults to api.minimax.io (international), but Chinese platform
+	// API keys only work on the CN endpoint. Must include ALL required fields
+	// (baseUrl, api, models) to pass Zod strict validation.
+	models, _ := internalConfig["models"].(map[string]interface{})
+	if models == nil {
+		models = make(map[string]interface{})
+	}
+	modProviders, _ := models["providers"].(map[string]interface{})
+	if modProviders == nil {
+		modProviders = make(map[string]interface{})
+	}
+	modProviders["minimax"] = map[string]interface{}{
+		"baseUrl": "https://api.minimaxi.com/anthropic",
+		"api":     "anthropic-messages",
+		"models": []interface{}{
+			map[string]interface{}{"id": "MiniMax-M2.7"},
+			map[string]interface{}{"id": "MiniMax-M2.7-highspeed"},
+			map[string]interface{}{"id": "MiniMax-M2.5"},
+			map[string]interface{}{"id": "MiniMax-M2.5-highspeed"},
+		},
+	}
+	models["providers"] = modProviders
+	internalConfig["models"] = models
 
 	// Write back
 	os.MkdirAll(internalDir, 0755)

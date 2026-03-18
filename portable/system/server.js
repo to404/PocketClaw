@@ -91,9 +91,9 @@ function syncAuthProfiles(config) {
 }
 
 /**
- * Sync model setting to OpenClaw's internal config.
- * Only writes agents.defaults.model — API keys go through auth-profiles.json.
- * Do NOT write to models.providers (incomplete entries fail Zod strict validation).
+ * Sync model + MiniMax CN base URL to OpenClaw's internal config.
+ * API keys go through auth-profiles.json only.
+ * MiniMax provider needs COMPLETE entry (baseUrl, api, models) to pass Zod strict.
  */
 function syncInternalConfig(config) {
   const internalDir = path.join(DATA_DIR, ".openclaw", ".openclaw");
@@ -112,6 +112,21 @@ function syncInternalConfig(config) {
     if (!internal.agents.defaults) internal.agents.defaults = {};
     internal.agents.defaults.model = model;
   }
+
+  // Override MiniMax to China endpoint (api.minimaxi.com).
+  // Default is api.minimax.io (international) — CN API keys get 401 there.
+  if (!internal.models) internal.models = {};
+  if (!internal.models.providers) internal.models.providers = {};
+  internal.models.providers.minimax = {
+    baseUrl: "https://api.minimaxi.com/anthropic",
+    api: "anthropic-messages",
+    models: [
+      { id: "MiniMax-M2.7" },
+      { id: "MiniMax-M2.7-highspeed" },
+      { id: "MiniMax-M2.5" },
+      { id: "MiniMax-M2.5-highspeed" },
+    ],
+  };
 
   fs.mkdirSync(internalDir, { recursive: true });
   fs.writeFileSync(
