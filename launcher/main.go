@@ -62,6 +62,16 @@ func main() {
 	os.Setenv("OPENCLAW_HOME", filepath.Join(baseDir, "data", ".openclaw"))
 	os.Setenv("POCKETCLAW_GATEWAY_TOKEN", "pocketclaw-local")
 
+	// Set a known gateway auth token via OpenClaw's config system
+	logMsg("正在配置 Gateway 令牌...")
+	configCmd := exec.Command(nodeBin, openclawEntry, "config", "set", "gateway.auth.token", "pocketclaw-local")
+	configCmd.Dir = baseDir
+	configCmd.Stdout = logFile
+	configCmd.Stderr = logFile
+	if err := configCmd.Run(); err != nil {
+		logMsg("令牌配置失败（非致命）: " + err.Error())
+	}
+
 	// Start gateway — run Node.js directly with the JS entry point
 	logMsg("正在启动 AI 引擎...")
 	gatewayCmd := exec.Command(nodeBin, openclawEntry, "gateway", "--port", gatewayPort, "--allow-unconfigured")
