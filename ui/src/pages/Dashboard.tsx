@@ -8,6 +8,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const { config, loading, isConfigured } = useConfig();
   const [gatewayStatus, setGatewayStatus] = useState<"online" | "offline">("offline");
+  const [showApiKeyAlert, setShowApiKeyAlert] = useState(false);
 
   useEffect(() => {
     if (!loading && !isConfigured) {
@@ -38,6 +39,16 @@ export function Dashboard() {
   }, []);
 
   const modelName = config?.agent?.model?.split("/").pop() ?? "未配置";
+  const providerId = config?.agent?.model?.split("/")[0] ?? "";
+  const providerConfig = config?.[providerId] as Record<string, unknown> | undefined;
+  const hasApiKey = Boolean(providerConfig?.apiKey);
+
+  const handleChatClick = (e: React.MouseEvent) => {
+    if (!hasApiKey) {
+      e.preventDefault();
+      setShowApiKeyAlert(true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 md:p-8">
@@ -67,11 +78,21 @@ export function Dashboard() {
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-4">
-          <StatusCard icon="🤖" label="当前模型" value={modelName} />
+          <Link to="/settings" className="block">
+            <StatusCard
+              icon="🤖"
+              label="当前模型"
+              value={modelName}
+              status={hasApiKey ? "online" : "warning"}
+            />
+            {!hasApiKey && (
+              <p className="mt-1 text-center text-xs text-amber-600">点击配置 API Key</p>
+            )}
+          </Link>
           <StatusCard
             icon="💬"
-            label="Gateway 状态"
-            value={gatewayStatus === "online" ? "在线" : "离线"}
+            label="Gateway 服务"
+            value={gatewayStatus === "online" ? "已启动" : "未启动"}
             status={gatewayStatus}
           />
         </div>
@@ -79,6 +100,7 @@ export function Dashboard() {
         <div className="space-y-3">
           <Link
             to="/chat"
+            onClick={handleChatClick}
             className="flex items-center justify-between rounded-2xl bg-indigo-600 p-5 text-white shadow-lg transition-all hover:bg-indigo-700 hover:shadow-xl"
           >
             <span className="text-lg font-semibold">开始聊天</span>
@@ -109,6 +131,31 @@ export function Dashboard() {
             </svg>
           </a>
         </div>
+
+        {showApiKeyAlert && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+              <h3 className="mb-2 text-lg font-semibold text-gray-900">尚未配置 API Key</h3>
+              <p className="mb-4 text-sm text-gray-600">
+                需要先配置 AI 模型的 API Key 才能开始聊天。
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowApiKeyAlert(false)}
+                  className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  取消
+                </button>
+                <Link
+                  to="/settings"
+                  className="flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                >
+                  去配置
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

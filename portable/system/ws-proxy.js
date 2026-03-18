@@ -1,7 +1,7 @@
 const http = require("http");
 
 function createProxyServer(req, clientSocket, head, gatewayHost, gatewayPort) {
-  const token = process.env.OPENCLAW_GATEWAY_TOKEN || "";
+  const token = process.env.POCKETCLAW_GATEWAY_TOKEN || "pocketclaw-local";
   let path = req.url || "/";
   if (token) {
     path += (path.includes("?") ? "&" : "?") + "token=" + token;

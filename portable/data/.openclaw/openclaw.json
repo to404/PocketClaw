@@ -4,7 +4,10 @@
   },
   "gateway": {
     "port": 18789,
-    "host": "127.0.0.1"
+    "host": "127.0.0.1",
+    "auth": {
+      "token": "pocketclaw-local"
+    }
   },
   "webchat": {
     "enabled": true
