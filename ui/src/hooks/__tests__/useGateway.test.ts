@@ -9,7 +9,7 @@ class MockWebSocket {
   static readonly CLOSED = 3;
   readyState = 0;
   onopen: (() => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event: { code: number; reason: string }) => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   sent: string[] = [];
@@ -24,7 +24,7 @@ class MockWebSocket {
 
   close() {
     this.readyState = 3;
-    this.onclose?.();
+    this.onclose?.({ code: 1000, reason: "" });
   }
 
   simulateOpen() {

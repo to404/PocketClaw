@@ -113,7 +113,7 @@ export function Settings() {
               <p>基于 OpenClaw (MIT) 构建</p>
               <div className="flex gap-3 pt-2">
                 <a
-                  href="https://github.com/ausdin/PocketClaw"
+                  href="https://github.com/Austin5925/PocketClaw"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-indigo-600 hover:underline"
@@ -121,7 +121,7 @@ export function Settings() {
                   GitHub
                 </a>
                 <a
-                  href="https://github.com/ausdin/PocketClaw/issues"
+                  href="https://github.com/Austin5925/PocketClaw/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-indigo-600 hover:underline"

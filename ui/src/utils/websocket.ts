@@ -1,5 +1,5 @@
 type MessageHandler = (data: WebSocketMessage) => void;
-type StatusHandler = (connected: boolean) => void;
+type StatusHandler = (connected: boolean, error?: string) => void;
 
 export interface WebSocketMessage {
   type: string;
@@ -17,6 +17,7 @@ export class GatewayWebSocket {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private intentionallyClosed = false;
+  private consecutiveFailures = 0;
 
   constructor(url: string) {
     this.url = url;
@@ -31,6 +32,7 @@ export class GatewayWebSocket {
 
       this.ws.onopen = () => {
         this.reconnectAttempts = 0;
+        this.consecutiveFailures = 0;
         this.notifyStatus(true);
       };
 
@@ -43,13 +45,23 @@ export class GatewayWebSocket {
         }
       };
 
-      this.ws.onclose = () => {
-        this.notifyStatus(false);
-        if (!this.intentionallyClosed) this.scheduleReconnect();
+      this.ws.onclose = (event) => {
+        this.consecutiveFailures++;
+        const isAuthError = event.code === 1008 || event.code === 4401;
+
+        if (isAuthError || this.consecutiveFailures >= 3) {
+          this.notifyStatus(false, "连接被拒绝，请检查 Gateway 配置");
+        } else {
+          this.notifyStatus(false);
+        }
+
+        if (!this.intentionallyClosed && !isAuthError) {
+          this.scheduleReconnect();
+        }
       };
 
       this.ws.onerror = () => {
-        this.notifyStatus(false);
+        // onclose will fire after this, so don't notify here
       };
     } catch {
       this.notifyStatus(false);
@@ -89,12 +101,15 @@ export class GatewayWebSocket {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
-  private notifyStatus(connected: boolean): void {
-    this.statusHandlers.forEach((handler) => handler(connected));
+  private notifyStatus(connected: boolean, error?: string): void {
+    this.statusHandlers.forEach((handler) => handler(connected, error));
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.notifyStatus(false, "无法连接到 AI 引擎，请重新启动");
+      return;
+    }
 
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
     this.reconnectAttempts++;

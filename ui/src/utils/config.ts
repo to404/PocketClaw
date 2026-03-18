@@ -31,11 +31,17 @@ export async function getVersion(): Promise<{ version: string }> {
 
 export const MODEL_PROVIDERS: ModelProvider[] = [
   {
+    id: "minimax",
+    name: "MiniMax",
+    description: "国产首选，中文能力强",
+    models: ["minimax/MiniMax-Text-01"],
+    recommended: true,
+  },
+  {
     id: "deepseek",
     name: "DeepSeek",
     description: "编程首选，性价比高",
     models: ["deepseek/deepseek-chat", "deepseek/deepseek-coder"],
-    recommended: true,
   },
   {
     id: "kimi",

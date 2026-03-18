@@ -1,11 +1,16 @@
-const net = require("net");
 const http = require("http");
 
 function createProxyServer(req, clientSocket, head, gatewayHost, gatewayPort) {
+  const token = process.env.OPENCLAW_GATEWAY_TOKEN || "";
+  let path = req.url || "/";
+  if (token) {
+    path += (path.includes("?") ? "&" : "?") + "token=" + token;
+  }
+
   const options = {
     hostname: gatewayHost,
     port: gatewayPort,
-    path: req.url,
+    path: path,
     method: "GET",
     headers: {
       ...req.headers,
@@ -35,6 +40,18 @@ function createProxyServer(req, clientSocket, head, gatewayHost, gatewayPort) {
     clientSocket.on("error", () => proxySocket.destroy());
     proxySocket.on("close", () => clientSocket.destroy());
     clientSocket.on("close", () => proxySocket.destroy());
+  });
+
+  proxyReq.on("response", (res) => {
+    // Gateway rejected the upgrade (e.g. 401 unauthorized)
+    let body = "";
+    res.on("data", (chunk) => (body += chunk));
+    res.on("end", () => {
+      clientSocket.write(
+        `HTTP/1.1 ${res.statusCode} ${res.statusMessage}\r\n\r\n`,
+      );
+      clientSocket.destroy();
+    });
   });
 
   proxyReq.on("error", () => {

@@ -1,6 +1,6 @@
 {
   "agent": {
-    "model": "deepseek/deepseek-chat"
+    "model": "minimax/MiniMax-Text-01"
   },
   "gateway": {
     "port": 18789,

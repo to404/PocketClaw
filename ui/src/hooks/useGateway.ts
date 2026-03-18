@@ -4,6 +4,7 @@ import { GatewayWebSocket, type WebSocketMessage } from "../utils/websocket";
 
 interface UseGatewayReturn {
   connected: boolean;
+  connectionError: string;
   messages: ChatMessage[];
   sendMessage: (content: string) => void;
   clearMessages: () => void;
@@ -16,6 +17,7 @@ function makeId(): string {
 
 export function useGateway(): UseGatewayReturn {
   const [connected, setConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
   const wsRef = useRef<GatewayWebSocket | null>(null);
@@ -27,8 +29,13 @@ export function useGateway(): UseGatewayReturn {
     const ws = new GatewayWebSocket(wsUrl);
     wsRef.current = ws;
 
-    const unsubStatus = ws.onStatus((isConnected) => {
+    const unsubStatus = ws.onStatus((isConnected, error) => {
       setConnected(isConnected);
+      if (isConnected) {
+        setConnectionError("");
+      } else if (error) {
+        setConnectionError(error);
+      }
     });
 
     const unsubMessage = ws.onMessage((data: WebSocketMessage) => {
@@ -111,5 +118,5 @@ export function useGateway(): UseGatewayReturn {
     pendingIdRef.current = null;
   }, []);
 
-  return { connected, messages, sendMessage, clearMessages, pending };
+  return { connected, connectionError, messages, sendMessage, clearMessages, pending };
 }

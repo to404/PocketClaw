@@ -4,7 +4,8 @@ import { ChatBubble } from "../components/ChatBubble";
 import { useGateway } from "../hooks/useGateway";
 
 export function Chat() {
-  const { connected, messages, sendMessage, clearMessages, pending } = useGateway();
+  const { connected, connectionError, messages, sendMessage, clearMessages, pending } =
+    useGateway();
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -44,7 +45,7 @@ export function Chat() {
         <div className="text-center">
           <h1 className="font-semibold text-gray-900">聊天</h1>
           <p className={`text-xs ${connected ? "text-emerald-600" : "text-red-500"}`}>
-            {connected ? "已连接" : "未连接"}
+            {connected ? "已连接" : connectionError || "连接中..."}
           </p>
         </div>
         <button

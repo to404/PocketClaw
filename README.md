@@ -50,7 +50,7 @@
 
 - [使用教程](docs/TUTORIAL.md) — 详细图文指南
 - [常见问题](docs/FAQ.md) — 常见问题解答
-- [提交反馈](https://github.com/ausdin/PocketClaw/issues) — 在 GitHub 上反馈问题
+- [提交反馈](https://github.com/Austin5925/PocketClaw/issues) — 在 GitHub 上反馈问题
 
 ## 面向开发者
 
