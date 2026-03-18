@@ -361,10 +361,10 @@ func syncConfigToOpenClaw() {
 		"baseUrl": "https://api.minimaxi.com/anthropic",
 		"api":     "anthropic-messages",
 		"models": []interface{}{
-			map[string]interface{}{"id": "MiniMax-M2.7"},
-			map[string]interface{}{"id": "MiniMax-M2.7-highspeed"},
-			map[string]interface{}{"id": "MiniMax-M2.5"},
-			map[string]interface{}{"id": "MiniMax-M2.5-highspeed"},
+			map[string]interface{}{"id": "MiniMax-M2.7", "name": "MiniMax M2.7"},
+			map[string]interface{}{"id": "MiniMax-M2.7-highspeed", "name": "MiniMax M2.7 Highspeed"},
+			map[string]interface{}{"id": "MiniMax-M2.5", "name": "MiniMax M2.5"},
+			map[string]interface{}{"id": "MiniMax-M2.5-highspeed", "name": "MiniMax M2.5 Highspeed"},
 		},
 	}
 	models["providers"] = modProviders
