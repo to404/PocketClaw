@@ -5,6 +5,7 @@ import { useConfig } from "../useConfig";
 const mockConfig = {
   agent: { model: "deepseek/deepseek-chat" },
   gateway: { port: 18789 },
+  deepseek: { apiKey: "test-key" },
 };
 
 beforeEach(() => {

@@ -52,7 +52,12 @@ export function useConfig(): UseConfigReturn {
     [config, updateConfig],
   );
 
-  const isConfigured = Boolean(config?.agent?.model);
+  // Must have both model AND provider API key to be considered configured
+  const providerId = config?.agent?.model?.split("/")[0] ?? "";
+  const providerCfg = providerId
+    ? (config?.[providerId] as Record<string, unknown> | undefined)
+    : undefined;
+  const isConfigured = Boolean(config?.agent?.model && providerCfg?.apiKey);
 
   return { config, loading, error, updateConfig, setModel, reload, isConfigured };
 }
