@@ -95,6 +95,7 @@ jobs:
           VERSION="${{ needs.check-version.outputs.version }}"
           rm -f "portable/启动 PocketClaw.exe" 2>/dev/null || true
           rm -f portable/Windows-Start.bat portable/Windows-Menu.bat 2>/dev/null || true
+          rm -f portable/Mac-Start.command portable/Mac-Menu.command 2>/dev/null || true
 
           cd portable
           zip -r "../PocketClaw-v${VERSION}-mac.zip" . \
@@ -175,6 +176,7 @@ jobs:
           VERSION="${{ needs.check-version.outputs.version }}"
           rm -rf "portable/启动 PocketClaw.app" 2>/dev/null || true
           rm -f portable/Mac-Start.command portable/Mac-Menu.command 2>/dev/null || true
+          rm -f portable/Windows-Start.bat portable/Windows-Menu.bat 2>/dev/null || true
           cd portable
           7z a -r "../PocketClaw-v${VERSION}-windows.zip" . \
             -x!data/.openclaw/credentials \
