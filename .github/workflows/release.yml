@@ -93,25 +93,26 @@ jobs:
       - name: Create Mac package
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          # Remove Windows files from Mac package
           rm -f "portable/启动 PocketClaw.exe" 2>/dev/null || true
           rm -f portable/Windows-Start.bat portable/Windows-Menu.bat 2>/dev/null || true
-          tar -czf "PocketClaw-v${VERSION}-mac.tar.gz" \
-            --exclude='portable/data/.openclaw/credentials' \
-            --exclude='portable/data/memory/*.md' \
-            --exclude='portable/data/backups/*' \
-            portable/
+
+          cd portable
+          zip -r "../PocketClaw-v${VERSION}-mac.zip" . \
+            -x "data/.openclaw/credentials/*" \
+            -x "data/memory/*.md" \
+            -x "data/backups/*"
 
       - name: Create update package
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          tar -czf "PocketClaw-v${VERSION}-update.tar.gz" \
-            -C portable app/ui/ system/ version.txt
+          cd portable
+          zip -r "../PocketClaw-v${VERSION}-update.zip" \
+            app/ui/ system/ version.txt
 
       - uses: actions/upload-artifact@v4
         with:
           name: release-mac
-          path: PocketClaw-*.tar.gz
+          path: PocketClaw-*.zip
 
   build-windows:
     needs: check-version
@@ -169,22 +170,18 @@ jobs:
             -o "../portable/启动 PocketClaw.exe" main.go
 
       - name: Create Windows package
-        shell: bash
+        shell: powershell
         run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          # Remove Mac files from Windows package
-          rm -rf "portable/启动 PocketClaw.app" 2>/dev/null || true
-          rm -f portable/Mac-Start.command portable/Mac-Menu.command 2>/dev/null || true
-          tar -czf "PocketClaw-v${VERSION}-windows.tar.gz" \
-            --exclude='portable/data/.openclaw/credentials' \
-            --exclude='portable/data/memory/*.md' \
-            --exclude='portable/data/backups/*' \
-            portable/
+          $VERSION = "${{ needs.check-version.outputs.version }}"
+          Remove-Item -Path "portable\启动 PocketClaw.app" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "portable\Mac-Start.command" -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "portable\Mac-Menu.command" -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path "portable\*" -DestinationPath "PocketClaw-v${VERSION}-windows.zip"
 
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows
-          path: PocketClaw-*.tar.gz
+          path: PocketClaw-*.zip
 
   release:
     needs: [check-version, build-mac, build-windows]
@@ -199,7 +196,7 @@ jobs:
           merge-multiple: true
 
       - name: List packages
-        run: ls -lh PocketClaw-*.tar.gz
+        run: ls -lh PocketClaw-*.zip
 
       - name: Create tag and release
         env:
@@ -216,4 +213,4 @@ jobs:
           gh release create "$VERSION" \
             --title "PocketClaw $VERSION" \
             --generate-notes \
-            PocketClaw-*.tar.gz
+            PocketClaw-*.zip

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	gatewayPort = "18789"
-	uiPort      = "3210"
+	gatewayPort    = "18789"
+	uiPort         = "3210"
+	healthTimeout  = 90 // seconds, USB 2.0 needs more time
 )
 
 var (
@@ -30,18 +31,21 @@ func main() {
 
 	logMsg("PocketClaw 启动中...")
 	logMsg("版本: " + readVersion())
+	logMsg("工作目录: " + baseDir)
 
 	nodeBin := detectNode()
 	if nodeBin == "" {
 		showError("运行环境不完整：Node.js 未找到。\n请重新获取 PocketClaw 完整版本。")
 		return
 	}
+	logMsg("Node.js: " + nodeBin)
 
 	openclawBin := detectOpenClaw()
 	if openclawBin == "" {
 		showError("运行环境不完整：AI 引擎未找到。\n请重新获取 PocketClaw 完整版本。")
 		return
 	}
+	logMsg("OpenClaw: " + openclawBin)
 
 	if !fileExists(filepath.Join(baseDir, "app", "ui", "dist", "index.html")) {
 		showError("运行环境不完整：界面文件未找到。\n请重新获取 PocketClaw 完整版本。")
@@ -57,6 +61,7 @@ func main() {
 	os.Setenv("PATH", filepath.Dir(nodeBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	os.Setenv("OPENCLAW_HOME", filepath.Join(baseDir, "data", ".openclaw"))
 
+	// Start gateway
 	logMsg("正在启动 AI 引擎...")
 	var gatewayCmd *exec.Cmd
 	if runtime.GOOS == "windows" {
@@ -72,15 +77,55 @@ func main() {
 		return
 	}
 
-	if !waitForHealth("http://127.0.0.1:"+gatewayPort+"/health", 30) {
-		showError("AI 引擎启动超时，请重试。")
+	// Monitor gateway process for early exit
+	gatewayExited := make(chan error, 1)
+	go func() {
+		gatewayExited <- gatewayCmd.Wait()
+	}()
+
+	// Health check with early exit detection
+	logMsg("等待 AI 引擎就绪（USB 2.0 可能需要较长时间）...")
+	healthy := false
+	client := &http.Client{Timeout: 2 * time.Second}
+	for i := 0; i < healthTimeout; i++ {
+		select {
+		case err := <-gatewayExited:
+			// Gateway crashed before becoming healthy
+			errMsg := "AI 引擎异常退出"
+			if err != nil {
+				errMsg += ": " + err.Error()
+			}
+			logMsg(errMsg)
+			showErrorWithLog(errMsg)
+			return
+		default:
+		}
+
+		resp, err := client.Get("http://127.0.0.1:" + gatewayPort + "/health")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				healthy = true
+				break
+			}
+		}
+
+		if i > 0 && i%10 == 0 {
+			logMsg(fmt.Sprintf("仍在等待 AI 引擎...（%d/%d 秒）", i, healthTimeout))
+		}
+		time.Sleep(time.Second)
+	}
+
+	if !healthy {
 		if gatewayCmd.Process != nil {
 			gatewayCmd.Process.Kill()
 		}
+		showErrorWithLog("AI 引擎启动超时（已等待 " + fmt.Sprintf("%d", healthTimeout) + " 秒）")
 		return
 	}
 	logMsg("AI 引擎已启动")
 
+	// Start UI server
 	logMsg("正在启动界面...")
 	uiCmd := exec.Command(nodeBin, serverJs)
 	uiCmd.Dir = baseDir
@@ -99,19 +144,15 @@ func main() {
 	logMsg("正在打开浏览器...")
 	openBrowser("http://localhost:" + uiPort)
 	logMsg("PocketClaw 已启动！")
+	logMsg("如果浏览器没有自动打开，请手动访问: http://localhost:" + uiPort)
 
+	// Wait for signal or gateway exit
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	done := make(chan struct{})
-	go func() {
-		gatewayCmd.Wait()
-		close(done)
-	}()
-
 	select {
 	case <-sigCh:
-	case <-done:
+	case <-gatewayExited:
 	}
 
 	logMsg("正在关闭...")
@@ -201,21 +242,6 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-func waitForHealth(url string, maxRetries int) bool {
-	client := &http.Client{Timeout: 2 * time.Second}
-	for i := 0; i < maxRetries; i++ {
-		resp, err := client.Get(url)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				return true
-			}
-		}
-		time.Sleep(time.Second)
-	}
-	return false
-}
-
 func openBrowser(url string) {
 	switch runtime.GOOS {
 	case "darwin":
@@ -232,8 +258,42 @@ func showError(msg string) {
 		exec.Command("osascript", "-e",
 			fmt.Sprintf(`display dialog "%s" buttons {"确定"} with title "PocketClaw" with icon stop`, msg)).Run()
 	case "windows":
-		fmt.Fprintf(os.Stderr, "[PocketClaw ERROR] %s\n", msg)
+		fmt.Fprintf(os.Stderr, "\n[PocketClaw ERROR] %s\n", msg)
 		fmt.Println("按 Enter 键退出...")
+		fmt.Scanln()
+	}
+}
+
+func showErrorWithLog(msg string) {
+	logMsg("ERROR: " + msg)
+
+	// Read last lines of log for diagnosis
+	logPath := filepath.Join(baseDir, "data", "pocketclaw.log")
+	logFile.Sync()
+	logData, err := os.ReadFile(logPath)
+	logTail := ""
+	if err == nil {
+		lines := strings.Split(strings.TrimSpace(string(logData)), "\n")
+		start := 0
+		if len(lines) > 20 {
+			start = len(lines) - 20
+		}
+		logTail = strings.Join(lines[start:], "\n")
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		exec.Command("osascript", "-e",
+			fmt.Sprintf(`display dialog "%s" buttons {"确定"} with title "PocketClaw" with icon stop`, msg)).Run()
+	case "windows":
+		fmt.Fprintf(os.Stderr, "\n[PocketClaw ERROR] %s\n", msg)
+		if logTail != "" {
+			fmt.Println("\n--- 日志（用于排查问题）---")
+			fmt.Println(logTail)
+			fmt.Println("--- 日志结束 ---")
+			fmt.Printf("\n日志文件: %s\n", logPath)
+		}
+		fmt.Println("\n按 Enter 键退出...")
 		fmt.Scanln()
 	}
 }
