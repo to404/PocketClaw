@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION_FILE="$BASE_DIR/version.txt"
 BACKUP_DIR="$BASE_DIR/data/backups"
-GITHUB_REPO="ausdin/PocketClaw"
+GITHUB_REPO="Austin5925/PocketClaw"
 
 log() { echo "[PocketClaw Update] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }

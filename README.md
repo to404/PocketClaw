@@ -14,8 +14,8 @@
 
 将 U 盘插入电脑，打开 U 盘，找到启动文件并双击：
 
-- **Windows 用户** → 双击 `启动 PocketClaw.exe`
-- **Mac 用户** → 双击 `启动 PocketClaw.app`
+- **Windows 用户** → 双击 `启动PocketClaw.exe`
+- **Mac 用户** → 双击 `启动PocketClaw.app`
 
 > **Mac 用户注意**：如果提示"无法打开"，请右键点击文件，选择"打开"，然后在弹窗中再点一次"打开"。这是 macOS 的安全提示，只需操作一次。
 
@@ -82,7 +82,7 @@ cd ui && pnpm build
 cd ui && pnpm lint && pnpm test
 
 # Launcher（Go 交叉编译）
-cd launcher && GOOS=windows GOARCH=amd64 go build -o "../portable/启动 PocketClaw.exe" .
+cd launcher && GOOS=windows GOARCH=amd64 go build -o "../portable/启动PocketClaw.exe" .
 ```
 
 ## 许可证

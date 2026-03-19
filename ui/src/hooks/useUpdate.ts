@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import type { VersionInfo } from "../types";
 import { getVersion } from "../utils/config";
 
-const GITHUB_REPO = "ausdin/PocketClaw";
+const GITHUB_REPO = "Austin5925/PocketClaw";
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 interface UseUpdateReturn {

@@ -76,7 +76,7 @@ cd ui && pnpm lint && pnpm test && pnpm build
 
 # Go launcher（必须用 go build . 不是 go build main.go）
 cd launcher && go vet .
-cd launcher && GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "../portable/启动 PocketClaw.exe" .
+cd launcher && GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "../portable/启动PocketClaw.exe" .
 cd launcher && GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o "../portable/PocketClaw-arm64" .
 ```
 
@@ -85,7 +85,7 @@ cd launcher && GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o "../portabl
 - **用户永远不接触命令行** — 所有操作通过双击文件或 Web UI 完成
 - **首次启动自动初始化** — 启动脚本检测到缺少运行时/OpenClaw 时自动运行 setup
 - **所有提示使用中文** — 启动窗口、错误信息、UI 界面全部中文
-- **交付形式** — Windows: `启动 PocketClaw.exe`（Go 编译）；Mac: `启动 PocketClaw.app`（.app bundle）
+- **交付形式** — Windows: `启动PocketClaw.exe`（Go 编译）；Mac: `启动PocketClaw.app`（.app bundle）
 - **启动器源码** — `launcher/main.go` + build-tagged 平台文件
 - **自动发布** — 修改 `portable/version.txt` 并 push 到 master，GitHub Actions 自动打 tag + 发布 Release
 - **面向对象** — 非技术背景用户（电脑小白），不能假设用户知道任何技术概念

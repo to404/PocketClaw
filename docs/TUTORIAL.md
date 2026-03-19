@@ -28,8 +28,8 @@
 
 打开 U 盘，找到启动文件并双击：
 
-- **Windows**: 双击 `启动 PocketClaw.exe`
-- **Mac**: 双击 `启动 PocketClaw.app`
+- **Windows**: 双击 `启动PocketClaw.exe`
+- **Mac**: 双击 `启动PocketClaw.app`
 
 > **Mac 用户注意**：如果提示"无法打开"，请右键点击文件，选择"打开"，然后在弹窗中再点一次"打开"。这是 macOS 的安全提示，只需操作一次。
 

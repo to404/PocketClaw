@@ -54,6 +54,6 @@ jobs:
       - name: Build launchers
         working-directory: launcher
         run: |
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "../portable/启动 PocketClaw.exe" .
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "../portable/启动PocketClaw.exe" .
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o "../portable/PocketClaw-arm64" .
           GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o "../portable/PocketClaw-x64" .

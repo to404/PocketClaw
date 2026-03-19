@@ -14,8 +14,8 @@ Just two steps:
 
 Plug in the USB drive, open it, and double-click the launcher:
 
-- **Windows** → Double-click `启动 PocketClaw.exe`
-- **Mac** → Double-click `启动 PocketClaw.app`
+- **Windows** → Double-click `启动PocketClaw.exe`
+- **Mac** → Double-click `启动PocketClaw.app`
 
 > **Mac users**: If you see "cannot be opened", right-click the file, select "Open", then click "Open" again in the dialog. This is a one-time macOS security prompt.
 
@@ -82,7 +82,7 @@ cd ui && pnpm build
 cd ui && pnpm lint && pnpm test
 
 # Launcher (Go cross-compile)
-cd launcher && GOOS=windows GOARCH=amd64 go build -o "../portable/启动 PocketClaw.exe" .
+cd launcher && GOOS=windows GOARCH=amd64 go build -o "../portable/启动PocketClaw.exe" .
 ```
 
 ## License

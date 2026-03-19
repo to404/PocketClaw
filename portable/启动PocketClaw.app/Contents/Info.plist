@@ -7,7 +7,7 @@
     <key>CFBundleName</key>
     <string>PocketClaw</string>
     <key>CFBundleDisplayName</key>
-    <string>启动 PocketClaw</string>
+    <string>启动PocketClaw</string>
     <key>CFBundleIdentifier</key>
     <string>com.pocketclaw.launcher</string>
     <key>CFBundleVersion</key>

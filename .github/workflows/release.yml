@@ -82,18 +82,18 @@ jobs:
         working-directory: launcher
         run: |
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" \
-            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64" .
+            -o "../portable/启动PocketClaw.app/Contents/MacOS/PocketClaw-arm64" .
           GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" \
-            -o "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-x64" .
+            -o "../portable/启动PocketClaw.app/Contents/MacOS/PocketClaw-x64" .
 
-          chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/launcher"
-          chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-arm64"
-          chmod +x "../portable/启动 PocketClaw.app/Contents/MacOS/PocketClaw-x64"
+          chmod +x "../portable/启动PocketClaw.app/Contents/MacOS/launcher"
+          chmod +x "../portable/启动PocketClaw.app/Contents/MacOS/PocketClaw-arm64"
+          chmod +x "../portable/启动PocketClaw.app/Contents/MacOS/PocketClaw-x64"
 
       - name: Create Mac package
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          rm -f "portable/启动 PocketClaw.exe" 2>/dev/null || true
+          rm -f "portable/启动PocketClaw.exe" 2>/dev/null || true
           rm -f portable/Windows-Start.bat portable/Windows-Menu.bat 2>/dev/null || true
           rm -f portable/Mac-Start.command portable/Mac-Menu.command 2>/dev/null || true
 
@@ -168,13 +168,13 @@ jobs:
         working-directory: launcher
         run: |
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" \
-            -o "../portable/启动 PocketClaw.exe" .
+            -o "../portable/启动PocketClaw.exe" .
 
       - name: Create Windows package
         shell: bash
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          rm -rf "portable/启动 PocketClaw.app" 2>/dev/null || true
+          rm -rf "portable/启动PocketClaw.app" 2>/dev/null || true
           rm -f portable/Mac-Start.command portable/Mac-Menu.command 2>/dev/null || true
           rm -f portable/Windows-Start.bat portable/Windows-Menu.bat 2>/dev/null || true
           cd portable

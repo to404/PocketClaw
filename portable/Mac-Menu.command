@@ -8,7 +8,7 @@ show_menu() {
     echo "╔══════════════════════════════════════╗"
     echo "║        PocketClaw 管理菜单           ║"
     echo "╠══════════════════════════════════════╣"
-    echo "║  1. 启动 PocketClaw                  ║"
+    echo "║  1. 启动PocketClaw                  ║"
     echo "║  2. 检查更新                         ║"
     echo "║  3. 重新初始化 (setup)               ║"
     echo "║  4. 查看版本信息                     ║"

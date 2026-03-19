@@ -6,7 +6,7 @@ set "SCRIPT_DIR=%~dp0"
 set "BASE_DIR=%SCRIPT_DIR%..\"
 set "VERSION_FILE=%BASE_DIR%version.txt"
 set "BACKUP_DIR=%BASE_DIR%data\backups"
-set "GITHUB_REPO=ausdin/PocketClaw"
+set "GITHUB_REPO=Austin5925/PocketClaw"
 
 echo [PocketClaw Update] === PocketClaw Update ===
 
