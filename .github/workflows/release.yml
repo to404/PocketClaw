@@ -108,7 +108,7 @@ jobs:
           VERSION="${{ needs.check-version.outputs.version }}"
           cd portable
           zip -r "../PocketClaw-v${VERSION}-update.zip" \
-            app/ui/ system/ version.txt
+            app/ui/ app/core/ system/ version.txt
 
       - uses: actions/upload-artifact@v4
         with:
