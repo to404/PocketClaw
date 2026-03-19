@@ -27,8 +27,8 @@ export function Chat() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-gray-50">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+    <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-900">
+      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
         <Link
           to="/dashboard"
           className="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
@@ -43,7 +43,7 @@ export function Chat() {
           </svg>
         </Link>
         <div className="text-center">
-          <h1 className="font-semibold text-gray-900">聊天</h1>
+          <h1 className="font-semibold text-gray-900 dark:text-gray-100">聊天</h1>
           <p className={`text-xs ${connected ? "text-emerald-600" : "text-red-500"}`}>
             {connected ? "已连接" : connectionError || "连接中..."}
           </p>
@@ -89,7 +89,7 @@ export function Chat() {
         </div>
       </div>
 
-      <div className="border-t border-gray-200 bg-white p-4">
+      <div className="border-t border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="mx-auto flex max-w-2xl gap-3">
           <textarea
             value={input}
@@ -97,7 +97,7 @@ export function Chat() {
             onKeyDown={handleKeyDown}
             placeholder="输入消息..."
             rows={1}
-            className="flex-1 resize-none rounded-xl border-2 border-gray-200 px-4 py-3 text-sm transition-colors focus:border-indigo-500 focus:outline-none"
+            className="flex-1 resize-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
           />
           <button
             onClick={handleSend}

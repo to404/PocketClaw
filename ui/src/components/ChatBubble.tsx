@@ -36,7 +36,7 @@ export function ChatBubble({ message, onRegenerate }: ChatBubbleProps) {
           className={`max-w-[80%] rounded-2xl px-4 py-3 ${
             isUser
               ? "bg-indigo-600 text-white"
-              : "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
+              : "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-700"
           }`}
         >
           {isUser ? (

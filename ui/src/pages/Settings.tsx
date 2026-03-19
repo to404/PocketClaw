@@ -4,10 +4,12 @@ import { ModelSelector } from "../components/ModelSelector";
 import { ApiKeyInput } from "../components/ApiKeyInput";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { useConfig } from "../hooks/useConfig";
+import { useTheme } from "../hooks/useTheme";
 import { showToast } from "../components/Toast";
 
 export function Settings() {
   const { config, updateConfig, loading } = useConfig();
+  const { theme, setTheme } = useTheme();
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -77,8 +79,27 @@ export function Settings() {
             <ApiKeyInput value={apiKey} onChange={setApiKey} />
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <h3 className="mb-3 font-semibold text-gray-900">聊天平台</h3>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">外观</h3>
+            <div className="flex gap-2">
+              {(["system", "light", "dark"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTheme(t)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    theme === t
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  {t === "system" ? "跟随系统" : t === "light" ? "浅色" : "深色"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">聊天平台</h3>
             <p className="text-sm text-gray-500">
               连接 QQ、飞书、微信等聊天平台，请使用
               <a
