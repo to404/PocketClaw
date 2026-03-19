@@ -4,7 +4,7 @@ import { ChatBubble } from "../components/ChatBubble";
 import { useGateway } from "../hooks/useGateway";
 
 export function Chat() {
-  const { connected, connectionError, messages, sendMessage, clearMessages, pending } =
+  const { connected, connectionError, messages, sendMessage, regenerate, clearMessages, pending } =
     useGateway();
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -74,8 +74,16 @@ export function Chat() {
           </div>
         )}
         <div className="mx-auto max-w-2xl space-y-4">
-          {messages.map((msg) => (
-            <ChatBubble key={msg.id} message={msg} />
+          {messages.map((msg, idx) => (
+            <ChatBubble
+              key={msg.id}
+              message={msg}
+              onRegenerate={
+                msg.role === "assistant" && idx === messages.length - 1 && !pending
+                  ? regenerate
+                  : undefined
+              }
+            />
           ))}
           <div ref={messagesEndRef} />
         </div>

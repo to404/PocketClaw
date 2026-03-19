@@ -7,6 +7,7 @@ interface UseGatewayReturn {
   connectionError: string;
   messages: ChatMessage[];
   sendMessage: (content: string) => void;
+  regenerate: () => void;
   clearMessages: () => void;
   pending: boolean;
 }
@@ -159,11 +160,54 @@ export function useGateway(): UseGatewayReturn {
     });
   }, []);
 
+  const regenerate = useCallback(() => {
+    if (pending || !wsRef.current) return;
+    // Find the last user message to resend
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    if (!lastUserMsg) return;
+
+    // Remove the last assistant message
+    setMessages((prev) => {
+      let lastIdx = -1;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i]?.role === "assistant") {
+          lastIdx = i;
+          break;
+        }
+      }
+      if (lastIdx >= 0) {
+        return prev.filter((_, i) => i !== lastIdx);
+      }
+      return prev;
+    });
+
+    // Resend the last user message
+    const assistantId = makeId();
+    const assistantMsg: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      timestamp: Date.now(),
+      pending: true,
+    };
+
+    pendingIdRef.current = assistantId;
+    setPending(true);
+    setMessages((prev) => [...prev, assistantMsg]);
+
+    wsRef.current.sendRpc("chat.send", {
+      sessionKey: "agent:main:main",
+      message: lastUserMsg.content,
+      deliver: false,
+      idempotencyKey: uuid(),
+    });
+  }, [messages, pending]);
+
   const clearMessages = useCallback(() => {
     setMessages([]);
     setPending(false);
     pendingIdRef.current = null;
   }, []);
 
-  return { connected, connectionError, messages, sendMessage, clearMessages, pending };
+  return { connected, connectionError, messages, sendMessage, regenerate, clearMessages, pending };
 }
