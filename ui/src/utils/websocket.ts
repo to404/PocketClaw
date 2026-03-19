@@ -114,7 +114,7 @@ export class GatewayWebSocket {
           platform: navigator.platform,
         },
         role: "operator",
-        scopes: ["operator.read", "operator.write"],
+        scopes: ["operator.read", "operator.write", "operator.admin"],
         device: {
           id: "pocketclaw",
           publicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
