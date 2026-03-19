@@ -4,11 +4,13 @@ import { ModelSelector } from "../components/ModelSelector";
 import { ApiKeyInput } from "../components/ApiKeyInput";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { useConfig } from "../hooks/useConfig";
+import { useGatewayConnection } from "../hooks/GatewayContext";
 import { useTheme } from "../hooks/useTheme";
 import { showToast } from "../components/Toast";
 
 export function Settings() {
   const { config, updateConfig, loading } = useConfig();
+  const { sendRpc } = useGatewayConnection();
   const { theme, setTheme } = useTheme();
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -32,6 +34,8 @@ export function Settings() {
         agent: { ...config?.agent, model },
         [provider]: { apiKey },
       });
+      // Refresh gateway auth store (auth-profiles.json is cached in memory)
+      sendRpc("secrets.reload", {});
       showToast("设置已保存", "success");
     } catch {
       showToast("保存失败", "error");

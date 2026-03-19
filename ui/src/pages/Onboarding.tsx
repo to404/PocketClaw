@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { ModelSelector } from "../components/ModelSelector";
 import { ApiKeyInput } from "../components/ApiKeyInput";
 import { useConfig } from "../hooks/useConfig";
+import { useGatewayConnection } from "../hooks/GatewayContext";
 import { MODEL_PROVIDERS } from "../utils/config";
 
 export function Onboarding() {
   const navigate = useNavigate();
   const { updateConfig } = useConfig();
+  const { sendRpc } = useGatewayConnection();
   const [step, setStep] = useState(1);
-  const [showRestartHint, setShowRestartHint] = useState(false);
   const [model, setModel] = useState("minimax/MiniMax-M2.7");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -46,8 +47,15 @@ export function Onboarding() {
         agent: { model },
         [providerId]: { apiKey: apiKey.trim() },
       });
-      // Show restart hint — gateway may have cached empty auth state at startup
-      setShowRestartHint(true);
+
+      // Force gateway to reload auth store (auth-profiles.json is cached in memory at startup)
+      // Verified from source: src/agents/auth-profiles/store.ts runtimeAuthStoreSnapshots
+      sendRpc("secrets.reload", {});
+
+      // Small delay to let hot-reload + secrets refresh complete
+      await new Promise((r) => setTimeout(r, 500));
+
+      navigate("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存配置失败");
     } finally {
@@ -129,34 +137,6 @@ export function Onboarding() {
           )}
         </div>
       </div>
-
-      {showRestartHint && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="mb-2 text-lg font-semibold text-gray-900">配置已保存</h3>
-            <p className="mb-4 text-sm text-gray-600">
-              首次配置需要重启 PocketClaw 才能生效。请关闭启动窗口，然后重新双击启动。
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowRestartHint(false);
-                  navigate("/");
-                }}
-                className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                暂不重启
-              </button>
-              <button
-                onClick={() => window.close()}
-                className="flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-              >
-                我知道了
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
