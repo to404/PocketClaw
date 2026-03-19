@@ -46,7 +46,12 @@ function serveStatic(res, filePath) {
 
   try {
     const content = fs.readFileSync(filePath);
-    res.writeHead(200, { "Content-Type": contentType });
+    const headers = { "Content-Type": contentType };
+    // Prevent browser from caching HTML (so updates take effect immediately)
+    if (ext === ".html") {
+      headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    }
+    res.writeHead(200, headers);
     res.end(content);
   } catch {
     return false;
