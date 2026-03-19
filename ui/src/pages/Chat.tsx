@@ -1,13 +1,29 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { ChatBubble } from "../components/ChatBubble";
+import { MainLayout } from "../layouts/MainLayout";
 import { useGateway } from "../hooks/useGateway";
+import { MODEL_PROVIDERS } from "../utils/config";
+import { useConfig } from "../hooks/useConfig";
 
 export function Chat() {
-  const { connected, connectionError, messages, sendMessage, regenerate, clearMessages, pending } =
-    useGateway();
+  const {
+    connected,
+    connectionError,
+    messages,
+    sendMessage,
+    regenerate,
+    clearMessages,
+    pending,
+    currentSessionKey,
+    switchSession,
+    createSession,
+    loadSessionHistory,
+  } = useGateway();
+  const { config } = useConfig();
   const [input, setInput] = useState("");
+  const [showModelSelect, setShowModelSelect] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const currentModel = config?.agent?.model ?? "minimax/MiniMax-M2.7";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -26,34 +42,34 @@ export function Chat() {
     }
   };
 
+  const handleNewChat = () => {
+    createSession();
+  };
+
+  const handleSessionChange = (key: string) => {
+    switchSession(key);
+    loadSessionHistory(key);
+  };
+
   return (
-    <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-900">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-        <Link
-          to="/dashboard"
-          className="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
-            />
-          </svg>
-        </Link>
-        <div className="text-center">
-          <h1 className="font-semibold text-gray-900 dark:text-gray-100">聊天</h1>
+    <MainLayout
+      currentSessionKey={currentSessionKey}
+      onSessionChange={handleSessionChange}
+      onNewChat={handleNewChat}
+    >
+      {/* Chat header */}
+      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-800">
+        <div>
           <p className={`text-xs ${connected ? "text-emerald-600" : "text-red-500"}`}>
             {connected ? "已连接" : connectionError || "连接中..."}
           </p>
         </div>
         <button
           onClick={clearMessages}
-          className="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          title="清空聊天"
+          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+          title="清空当前对话"
         >
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -64,16 +80,17 @@ export function Chat() {
         </button>
       </header>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 && (
           <div className="flex h-full items-center justify-center">
-            <div className="text-center text-gray-400">
+            <div className="text-center text-gray-400 dark:text-gray-500">
               <p className="text-lg">开始和 AI 助手对话吧</p>
               <p className="mt-1 text-sm">输入任何问题，按 Enter 发送</p>
             </div>
           </div>
         )}
-        <div className="mx-auto max-w-2xl space-y-4">
+        <div className="mx-auto max-w-3xl space-y-4">
           {messages.map((msg, idx) => (
             <ChatBubble
               key={msg.id}
@@ -89,25 +106,70 @@ export function Chat() {
         </div>
       </div>
 
-      <div className="border-t border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-        <div className="mx-auto flex max-w-2xl gap-3">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入消息..."
-            rows={1}
-            className="flex-1 resize-none rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || pending || !connected}
-            className="rounded-xl bg-indigo-600 px-6 py-3 font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
-          >
-            发送
-          </button>
+      {/* Input area */}
+      <div className="border-t border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-end gap-2 rounded-xl border-2 border-gray-200 bg-white px-3 py-2 focus-within:border-indigo-500 dark:border-gray-600 dark:bg-gray-700">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="输入消息..."
+              rows={1}
+              className="flex-1 resize-none bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100"
+            />
+            <div className="flex items-center gap-1">
+              {/* Model selector */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowModelSelect(!showModelSelect)}
+                  className="rounded-lg px-2 py-1 text-[10px] text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-600"
+                  title="切换模型"
+                >
+                  {currentModel.split("/").pop()}
+                </button>
+                {showModelSelect && (
+                  <div className="absolute right-0 bottom-full mb-1 w-56 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-700">
+                    {MODEL_PROVIDERS.map((p) =>
+                      p.models.map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => {
+                            setShowModelSelect(false);
+                          }}
+                          className={`w-full px-3 py-1.5 text-left text-xs transition-colors hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                            m === currentModel
+                              ? "text-indigo-600 dark:text-indigo-400"
+                              : "text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          <span className="font-medium">{m.split("/").pop()}</span>
+                          <span className="ml-1 text-gray-400">({p.name})</span>
+                        </button>
+                      )),
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* Send */}
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || pending || !connected}
+                className="rounded-lg bg-indigo-600 p-1.5 text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </MainLayout>
   );
 }

@@ -10,6 +10,10 @@ interface UseGatewayReturn {
   regenerate: () => void;
   clearMessages: () => void;
   pending: boolean;
+  currentSessionKey: string;
+  switchSession: (key: string) => void;
+  createSession: (label?: string) => void;
+  loadSessionHistory: (key: string) => void;
 }
 
 function makeId(): string {
@@ -20,13 +24,21 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 
+const DEFAULT_SESSION = "agent:main:main";
+
 export function useGateway(): UseGatewayReturn {
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
+  const [currentSessionKey, setCurrentSessionKey] = useState(DEFAULT_SESSION);
   const wsRef = useRef<GatewayWebSocket | null>(null);
   const pendingIdRef = useRef<string | null>(null);
+  const sessionKeyRef = useRef(DEFAULT_SESSION);
+
+  useEffect(() => {
+    sessionKeyRef.current = currentSessionKey;
+  }, [currentSessionKey]);
 
   useEffect(() => {
     const ws = new GatewayWebSocket();
@@ -96,11 +108,56 @@ export function useGateway(): UseGatewayReturn {
         return;
       }
 
+      // Handle RPC responses (sessions.create, sessions.get, etc.)
+      if (data.type === "res" && (data as Record<string, unknown>).ok) {
+        const payload = data.payload as Record<string, unknown> | undefined;
+
+        // sessions.create response
+        if (payload?.key && typeof payload.key === "string" && payload.sessionId) {
+          const newKey = payload.key as string;
+          setCurrentSessionKey(newKey);
+          sessionKeyRef.current = newKey;
+          setMessages([]);
+          setPending(false);
+          pendingIdRef.current = null;
+        }
+
+        // sessions.get / chat.history response
+        if (payload?.messages && Array.isArray(payload.messages)) {
+          const history = (payload.messages as Array<Record<string, unknown>>)
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m) => {
+              let text = "";
+              if (typeof m.content === "string") {
+                text = m.content;
+              } else if (Array.isArray(m.content)) {
+                text = (m.content as Array<Record<string, unknown>>)
+                  .filter((c) => c.type === "text")
+                  .map((c) => (c.text as string) ?? "")
+                  .join("");
+              }
+              return {
+                id: makeId(),
+                role: m.role as "user" | "assistant",
+                content: text,
+                timestamp: (m.timestamp as number) ?? Date.now(),
+              } satisfies ChatMessage;
+            });
+          setMessages(history);
+        }
+        return;
+      }
+
       // Handle RPC error responses
       if (data.type === "res" && !(data as Record<string, unknown>).ok) {
         if (pendingIdRef.current) {
-          const payload = data.payload as Record<string, unknown> | undefined;
-          const errMsg = (payload?.message as string) ?? "请求失败";
+          const errPayload = (data as Record<string, unknown>).error as
+            | Record<string, unknown>
+            | undefined;
+          const errMsg =
+            (errPayload?.message as string) ??
+            ((data.payload as Record<string, unknown> | undefined)?.message as string) ??
+            "请求失败";
           setMessages((prev) =>
             prev.map((m) =>
               m.id === pendingIdRef.current
@@ -146,9 +203,8 @@ export function useGateway(): UseGatewayReturn {
     setPending(true);
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
-    // Send via OpenClaw chat.send RPC (verified from DevTools)
     wsRef.current.sendRpc("chat.send", {
-      sessionKey: "agent:main:main",
+      sessionKey: sessionKeyRef.current,
       message: content.trim(),
       deliver: false,
       idempotencyKey: uuid(),
@@ -157,11 +213,9 @@ export function useGateway(): UseGatewayReturn {
 
   const regenerate = useCallback(() => {
     if (pending || !wsRef.current) return;
-    // Find the last user message to resend
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUserMsg) return;
 
-    // Remove the last assistant message
     setMessages((prev) => {
       let lastIdx = -1;
       for (let i = prev.length - 1; i >= 0; i--) {
@@ -176,7 +230,6 @@ export function useGateway(): UseGatewayReturn {
       return prev;
     });
 
-    // Resend the last user message
     const assistantId = makeId();
     const assistantMsg: ChatMessage = {
       id: assistantId,
@@ -191,7 +244,7 @@ export function useGateway(): UseGatewayReturn {
     setMessages((prev) => [...prev, assistantMsg]);
 
     wsRef.current.sendRpc("chat.send", {
-      sessionKey: "agent:main:main",
+      sessionKey: sessionKeyRef.current,
       message: lastUserMsg.content,
       deliver: false,
       idempotencyKey: uuid(),
@@ -199,10 +252,52 @@ export function useGateway(): UseGatewayReturn {
   }, [messages, pending]);
 
   const clearMessages = useCallback(() => {
+    if (!wsRef.current) return;
+    setMessages([]);
+    setPending(false);
+    pendingIdRef.current = null;
+    // Reset session on the server
+    wsRef.current.sendRpc("sessions.reset", {
+      key: sessionKeyRef.current,
+      reason: "new",
+    });
+  }, []);
+
+  const switchSession = useCallback((key: string) => {
+    setCurrentSessionKey(key);
+    sessionKeyRef.current = key;
     setMessages([]);
     setPending(false);
     pendingIdRef.current = null;
   }, []);
 
-  return { connected, connectionError, messages, sendMessage, regenerate, clearMessages, pending };
+  const createSession = useCallback((label?: string) => {
+    if (!wsRef.current) return;
+    wsRef.current.sendRpc("sessions.create", {
+      label: label ?? undefined,
+      agentId: "main",
+    });
+  }, []);
+
+  const loadSessionHistory = useCallback((key: string) => {
+    if (!wsRef.current) return;
+    wsRef.current.sendRpc("chat.history", {
+      sessionKey: key,
+      limit: 200,
+    });
+  }, []);
+
+  return {
+    connected,
+    connectionError,
+    messages,
+    sendMessage,
+    regenerate,
+    clearMessages,
+    pending,
+    currentSessionKey,
+    switchSession,
+    createSession,
+    loadSessionHistory,
+  };
 }

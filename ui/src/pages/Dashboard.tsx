@@ -11,8 +11,8 @@ export function Dashboard() {
   const [showApiKeyAlert, setShowApiKeyAlert] = useState(false);
 
   useEffect(() => {
-    if (!loading && !isConfigured) {
-      navigate("/onboarding");
+    if (!loading) {
+      navigate(isConfigured ? "/" : "/onboarding");
     }
   }, [loading, isConfigured, navigate]);
 

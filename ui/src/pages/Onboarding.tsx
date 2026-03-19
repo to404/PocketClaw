@@ -45,7 +45,7 @@ export function Onboarding() {
         agent: { model },
         [providerId]: { apiKey: apiKey.trim() },
       });
-      navigate("/dashboard");
+      navigate("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存配置失败");
     } finally {
