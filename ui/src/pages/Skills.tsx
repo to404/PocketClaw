@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { GatewayWebSocket, type WebSocketMessage } from "../utils/websocket";
+import { useGatewayConnection } from "../hooks/GatewayContext";
+import type { WebSocketMessage } from "../utils/websocket";
 
 interface SkillEntry {
   name: string;
@@ -8,21 +9,16 @@ interface SkillEntry {
   eligible: boolean;
   disabled: boolean;
   bundled: boolean;
-  homepage?: string;
 }
 
 export function Skills() {
+  const { connected, sendRpc, onMessage } = useGatewayConnection();
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const ws = new GatewayWebSocket();
-    ws.onStatus((isConnected) => {
-      if (isConnected) {
-        ws.sendRpc("skills.status", {});
-      }
-    });
-    ws.onMessage((data: WebSocketMessage) => {
+    if (!connected) return;
+    const unsub = onMessage((data: WebSocketMessage) => {
       if (data.type === "res" && (data as Record<string, unknown>).ok) {
         const p = data.payload as Record<string, unknown> | undefined;
         if (p?.skills && Array.isArray(p.skills)) {
@@ -34,16 +30,15 @@ export function Skills() {
               eligible: s.eligible as boolean,
               disabled: s.disabled as boolean,
               bundled: s.bundled as boolean,
-              homepage: s.homepage as string | undefined,
             })),
           );
           setLoading(false);
         }
       }
     });
-    ws.connect();
-    return () => ws.disconnect();
-  }, []);
+    sendRpc("skills.status", {});
+    return unsub;
+  }, [connected, sendRpc, onMessage]);
 
   const enabledSkills = skills.filter((s) => s.eligible && !s.disabled);
   const disabledSkills = skills.filter((s) => !s.eligible || s.disabled);
@@ -53,7 +48,6 @@ export function Skills() {
       <div className="mx-auto max-w-2xl">
         <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">Skills</h2>
         {loading && <p className="text-sm text-gray-500">加载中...</p>}
-
         {!loading && enabledSkills.length > 0 && (
           <>
             <p className="mb-2 text-xs font-medium tracking-wider text-gray-400 uppercase">
@@ -86,7 +80,6 @@ export function Skills() {
             </div>
           </>
         )}
-
         {!loading && disabledSkills.length > 0 && (
           <>
             <p className="mb-2 text-xs font-medium tracking-wider text-gray-400 uppercase">
@@ -108,7 +101,6 @@ export function Skills() {
             </div>
           </>
         )}
-
         <p className="mt-6 text-center text-xs text-gray-400">
           管理 Skills 请使用{" "}
           <a

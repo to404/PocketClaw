@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { GatewayWebSocket, type WebSocketMessage } from "../utils/websocket";
+import { useGatewayConnection } from "../hooks/GatewayContext";
+import type { WebSocketMessage } from "../utils/websocket";
 
 interface SessionRow {
   key: string;
@@ -10,7 +11,6 @@ interface SessionRow {
   updatedAt?: number;
   totalTokens?: number;
   model?: string;
-  status?: string;
 }
 
 function formatTime(ts?: number): string {
@@ -26,24 +26,16 @@ function formatTime(ts?: number): string {
 
 export function History() {
   const navigate = useNavigate();
+  const { connected, sendRpc, onMessage } = useGatewayConnection();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const ws = new GatewayWebSocket();
-    ws.onStatus((isConnected) => {
-      if (isConnected) {
-        ws.sendRpc("sessions.list", {
-          limit: 50,
-          includeDerivedTitles: true,
-          includeLastMessage: true,
-        });
-      }
-    });
-    ws.onMessage((data: WebSocketMessage) => {
+    if (!connected) return;
+    const unsub = onMessage((data: WebSocketMessage) => {
       if (data.type === "res" && (data as Record<string, unknown>).ok) {
         const p = data.payload as Record<string, unknown> | undefined;
-        if (p?.sessions && Array.isArray(p.sessions)) {
+        if (p?.sessions && Array.isArray(p.sessions) && p.count !== undefined) {
           setSessions(
             (p.sessions as Array<Record<string, unknown>>).map((s) => ({
               key: s.key as string,
@@ -53,21 +45,19 @@ export function History() {
               updatedAt: s.updatedAt as number | undefined,
               totalTokens: s.totalTokens as number | undefined,
               model: s.model as string | undefined,
-              status: s.status as string | undefined,
             })),
           );
           setLoading(false);
         }
       }
     });
-    ws.connect();
-    return () => ws.disconnect();
-  }, []);
-
-  const handleClick = (key: string) => {
-    // Navigate to chat with this session key (via URL param or state)
-    navigate("/?session=" + encodeURIComponent(key));
-  };
+    sendRpc("sessions.list", {
+      limit: 50,
+      includeDerivedTitles: true,
+      includeLastMessage: true,
+    });
+    return unsub;
+  }, [connected, sendRpc, onMessage]);
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -83,7 +73,7 @@ export function History() {
             return (
               <button
                 key={s.key}
-                onClick={() => handleClick(s.key)}
+                onClick={() => navigate("/?session=" + encodeURIComponent(s.key))}
                 className="w-full rounded-xl border border-gray-200 bg-white p-4 text-left transition-colors hover:border-indigo-200 hover:bg-indigo-50/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700 dark:hover:bg-indigo-900/20"
               >
                 <div className="flex items-center justify-between">

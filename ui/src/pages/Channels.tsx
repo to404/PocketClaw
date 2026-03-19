@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { GatewayWebSocket, type WebSocketMessage } from "../utils/websocket";
+import { useGatewayConnection } from "../hooks/GatewayContext";
+import type { WebSocketMessage } from "../utils/websocket";
 
 interface ChannelAccount {
   accountId: string;
@@ -8,7 +9,6 @@ interface ChannelAccount {
   connected?: boolean;
   running?: boolean;
   lastError?: string;
-  dmPolicy?: string;
 }
 
 interface ChannelInfo {
@@ -18,17 +18,13 @@ interface ChannelInfo {
 }
 
 export function Channels() {
+  const { connected, sendRpc, onMessage } = useGatewayConnection();
   const [channels, setChannels] = useState<ChannelInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const ws = new GatewayWebSocket();
-    ws.onStatus((isConnected) => {
-      if (isConnected) {
-        ws.sendRpc("channels.status", {});
-      }
-    });
-    ws.onMessage((data: WebSocketMessage) => {
+    if (!connected) return;
+    const unsub = onMessage((data: WebSocketMessage) => {
       if (data.type === "res" && (data as Record<string, unknown>).ok) {
         const p = data.payload as Record<string, unknown> | undefined;
         if (p?.channelOrder && p?.channels) {
@@ -46,9 +42,9 @@ export function Channels() {
         }
       }
     });
-    ws.connect();
-    return () => ws.disconnect();
-  }, []);
+    sendRpc("channels.status", {});
+    return unsub;
+  }, [connected, sendRpc, onMessage]);
 
   return (
     <div className="h-full overflow-y-auto p-6">

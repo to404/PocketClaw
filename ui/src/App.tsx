@@ -7,10 +7,11 @@ import { Skills } from "./pages/Skills";
 import { History } from "./pages/History";
 import { Settings } from "./pages/Settings";
 import { ToastContainer } from "./components/Toast";
+import { GatewayProvider } from "./hooks/GatewayContext";
 
 export function App() {
   return (
-    <>
+    <GatewayProvider>
       <Routes>
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -22,6 +23,6 @@ export function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastContainer />
-    </>
+    </GatewayProvider>
   );
 }

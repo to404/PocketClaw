@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { ChatMessage } from "../types";
-import { GatewayWebSocket, type WebSocketMessage } from "../utils/websocket";
+import type { WebSocketMessage } from "../utils/websocket";
+import { useGatewayConnection } from "./GatewayContext";
 
 export interface SessionListItem {
   key: string;
@@ -37,40 +38,33 @@ function uuid(): string {
 const DEFAULT_SESSION = "agent:main:main";
 
 export function useGateway(): UseGatewayReturn {
-  const [connected, setConnected] = useState(false);
-  const [connectionError, setConnectionError] = useState("");
+  const { connected, connectionError, sendRpc, onMessage } = useGatewayConnection();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [currentSessionKey, setCurrentSessionKey] = useState(DEFAULT_SESSION);
   const [sessionList, setSessionList] = useState<SessionListItem[]>([]);
-  const wsRef = useRef<GatewayWebSocket | null>(null);
   const pendingIdRef = useRef<string | null>(null);
   const sessionKeyRef = useRef(DEFAULT_SESSION);
+  const sendRpcRef = useRef(sendRpc);
+  sendRpcRef.current = sendRpc;
 
   useEffect(() => {
     sessionKeyRef.current = currentSessionKey;
   }, [currentSessionKey]);
 
+  // Load session list when connected
   useEffect(() => {
-    const ws = new GatewayWebSocket();
-    wsRef.current = ws;
+    if (connected) {
+      sendRpc("sessions.list", {
+        limit: 20,
+        includeDerivedTitles: true,
+        includeLastMessage: true,
+      });
+    }
+  }, [connected, sendRpc]);
 
-    const unsubStatus = ws.onStatus((isConnected, error) => {
-      setConnected(isConnected);
-      if (isConnected) {
-        setConnectionError("");
-        // Load session list after connection established
-        ws.sendRpc("sessions.list", {
-          limit: 20,
-          includeDerivedTitles: true,
-          includeLastMessage: true,
-        });
-      } else if (error) {
-        setConnectionError(error);
-      }
-    });
-
-    const unsubMessage = ws.onMessage((data: WebSocketMessage) => {
+  useEffect(() => {
+    const unsub = onMessage((data: WebSocketMessage) => {
       // Handle OpenClaw chat events (agent responses)
       // Fields (state, message, runId) are TOP-LEVEL, not inside payload
       // (verified from OpenClaw source: src/gateway/server-chat.ts)
@@ -152,7 +146,7 @@ export function useGateway(): UseGatewayReturn {
           setPending(false);
           pendingIdRef.current = null;
           // Refresh session list
-          ws.sendRpc("sessions.list", {
+          sendRpcRef.current("sessions.list", {
             limit: 20,
             includeDerivedTitles: true,
             includeLastMessage: true,
@@ -209,17 +203,11 @@ export function useGateway(): UseGatewayReturn {
       }
     });
 
-    ws.connect();
-
-    return () => {
-      unsubStatus();
-      unsubMessage();
-      ws.disconnect();
-    };
-  }, []);
+    return unsub;
+  }, [onMessage]);
 
   const sendMessage = useCallback((content: string) => {
-    if (!content.trim() || !wsRef.current) return;
+    if (!content.trim()) return;
 
     const userMsg: ChatMessage = {
       id: makeId(),
@@ -241,7 +229,7 @@ export function useGateway(): UseGatewayReturn {
     setPending(true);
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
-    wsRef.current.sendRpc("chat.send", {
+    sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
       message: content.trim(),
       deliver: false,
@@ -250,7 +238,7 @@ export function useGateway(): UseGatewayReturn {
   }, []);
 
   const regenerate = useCallback(() => {
-    if (pending || !wsRef.current) return;
+    if (pending) return;
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUserMsg) return;
 
@@ -281,7 +269,7 @@ export function useGateway(): UseGatewayReturn {
     setPending(true);
     setMessages((prev) => [...prev, assistantMsg]);
 
-    wsRef.current.sendRpc("chat.send", {
+    sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
       message: lastUserMsg.content,
       deliver: false,
@@ -290,12 +278,11 @@ export function useGateway(): UseGatewayReturn {
   }, [messages, pending]);
 
   const clearMessages = useCallback(() => {
-    if (!wsRef.current) return;
     setMessages([]);
     setPending(false);
     pendingIdRef.current = null;
     // Reset session on the server
-    wsRef.current.sendRpc("sessions.reset", {
+    sendRpcRef.current("sessions.reset", {
       key: sessionKeyRef.current,
       reason: "new",
     });
@@ -310,24 +297,21 @@ export function useGateway(): UseGatewayReturn {
   }, []);
 
   const createSession = useCallback((label?: string) => {
-    if (!wsRef.current) return;
-    wsRef.current.sendRpc("sessions.create", {
+    sendRpcRef.current("sessions.create", {
       label: label ?? undefined,
       agentId: "main",
     });
   }, []);
 
   const loadSessionHistory = useCallback((key: string) => {
-    if (!wsRef.current) return;
-    wsRef.current.sendRpc("chat.history", {
+    sendRpcRef.current("chat.history", {
       sessionKey: key,
       limit: 200,
     });
   }, []);
 
   const refreshSessions = useCallback(() => {
-    if (!wsRef.current) return;
-    wsRef.current.sendRpc("sessions.list", {
+    sendRpcRef.current("sessions.list", {
       limit: 20,
       includeDerivedTitles: true,
       includeLastMessage: true,
