@@ -24,10 +24,37 @@ export function Onboarding() {
     setError(null);
 
     try {
-      const provider = model.split("/")[0] ?? "";
+      // Validate API Key by sending a minimal test request
+      const providerId = model.split("/")[0] ?? "";
+      const provider = MODEL_PROVIDERS.find((p) => p.id === providerId);
+      if (provider) {
+        const testUrl =
+          providerId === "minimax" ? "https://api.minimaxi.com/anthropic/v1/messages" : undefined;
+        if (testUrl) {
+          const testRes = await fetch(testUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey.trim(),
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: model.split("/")[1] ?? "",
+              max_tokens: 1,
+              messages: [{ role: "user", content: "hi" }],
+            }),
+          });
+          if (testRes.status === 401) {
+            setError("API Key 无效，请检查后重试");
+            setSaving(false);
+            return;
+          }
+        }
+      }
+
       await updateConfig({
         agent: { model },
-        [provider]: { apiKey: apiKey.trim() },
+        [providerId]: { apiKey: apiKey.trim() },
       });
       navigate("/dashboard");
     } catch (e) {
