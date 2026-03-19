@@ -357,7 +357,7 @@ func syncConfigToOpenClaw() {
 	if modProviders == nil {
 		modProviders = make(map[string]interface{})
 	}
-	modProviders["minimax"] = map[string]interface{}{
+	minimaxEntry := map[string]interface{}{
 		"baseUrl": "https://api.minimaxi.com/anthropic",
 		"api":     "anthropic-messages",
 		"models": []interface{}{
@@ -367,6 +367,14 @@ func syncConfigToOpenClaw() {
 			map[string]interface{}{"id": "MiniMax-M2.5-highspeed", "name": "MiniMax M2.5 Highspeed"},
 		},
 	}
+	// Include apiKey in models.providers so gateway config hot-reload picks it up
+	// (auth-profiles.json may not be re-read after gateway startup)
+	if minimax, ok := ourConfig["minimax"].(map[string]interface{}); ok {
+		if apiKey, ok := minimax["apiKey"].(string); ok && apiKey != "" {
+			minimaxEntry["apiKey"] = apiKey
+		}
+	}
+	modProviders["minimax"] = minimaxEntry
 	models["providers"] = modProviders
 	internalConfig["models"] = models
 

@@ -118,12 +118,15 @@ function syncInternalConfig(config) {
     internal.agents.defaults.model = model;
   }
 
-  // Override MiniMax to China endpoint (api.minimaxi.com).
+  // Override MiniMax to China endpoint (api.minimaxi.com) with API key.
   // Default is api.minimax.io (international) — CN API keys get 401 there.
+  // API key is included here as belt-and-suspenders alongside auth-profiles.json.
   if (!internal.models) internal.models = {};
   if (!internal.models.providers) internal.models.providers = {};
+  const minimaxApiKey = config.minimax?.apiKey;
   internal.models.providers.minimax = {
     baseUrl: "https://api.minimaxi.com/anthropic",
+    apiKey: minimaxApiKey ?? undefined,
     api: "anthropic-messages",
     models: [
       { id: "MiniMax-M2.7", name: "MiniMax M2.7" },
