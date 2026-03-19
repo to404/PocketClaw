@@ -51,8 +51,8 @@ xcopy /E /I /Y "%BASE_DIR%app" "%BACKUP_DIR%\app-%CURRENT_VERSION%-%TIMESTAMP%\a
 
 :: Download
 echo [PocketClaw Update] Downloading update...
-set "UPDATE_URL=https://github.com/%GITHUB_REPO%/releases/download/v%LATEST_VERSION%/PocketClaw-v%LATEST_VERSION%-update.tar.gz"
-set "UPDATE_FILE=%TEMP%\pocketclaw-update.tar.gz"
+set "UPDATE_URL=https://github.com/%GITHUB_REPO%/releases/download/v%LATEST_VERSION%/PocketClaw-v%LATEST_VERSION%-update.zip"
+set "UPDATE_FILE=%TEMP%\pocketclaw-update.zip"
 curl -fSL "%UPDATE_URL%" -o "%UPDATE_FILE%"
 if errorlevel 1 (
     echo [ERROR] Download failed
@@ -62,7 +62,7 @@ if errorlevel 1 (
 
 :: Extract
 echo [PocketClaw Update] Extracting update...
-tar -xzf "%UPDATE_FILE%" -C "%BASE_DIR%app" 2>nul
+powershell -Command "Expand-Archive -Path '%UPDATE_FILE%' -DestinationPath '%BASE_DIR%' -Force"
 del "%UPDATE_FILE%" 2>nul
 
 :: Update version

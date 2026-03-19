@@ -46,16 +46,14 @@ backup_current() {
 
 download_update() {
     local version="$1"
-    local url="https://github.com/$GITHUB_REPO/releases/download/v${version}/PocketClaw-v${version}-update.tar.gz"
-    local tmpfile="/tmp/pocketclaw-update-${version}.tar.gz"
+    local url="https://github.com/$GITHUB_REPO/releases/download/v${version}/PocketClaw-v${version}-update.zip"
+    local tmpfile="/tmp/pocketclaw-update-${version}.zip"
 
     log "Downloading update v${version}..."
     curl -fSL "$url" -o "$tmpfile" || error "Download failed"
 
     log "Extracting update..."
-    tar -xzf "$tmpfile" -C "$BASE_DIR/app" 2>/dev/null || \
-        tar -xzf "$tmpfile" -C "$BASE_DIR" 2>/dev/null || \
-        error "Extraction failed"
+    unzip -qo "$tmpfile" -d "$BASE_DIR" || error "Extraction failed"
 
     rm -f "$tmpfile"
     echo "$version" > "$VERSION_FILE"
