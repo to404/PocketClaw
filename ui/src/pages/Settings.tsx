@@ -4,14 +4,13 @@ import { ModelSelector } from "../components/ModelSelector";
 import { ApiKeyInput } from "../components/ApiKeyInput";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { useConfig } from "../hooks/useConfig";
+import { showToast } from "../components/Toast";
 
 export function Settings() {
   const { config, updateConfig, loading } = useConfig();
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
   useEffect(() => {
     if (config) {
       setModel(config.agent?.model ?? "");
@@ -25,17 +24,15 @@ export function Settings() {
 
   const handleSave = async () => {
     setSaving(true);
-    setSaved(false);
     try {
       const provider = model.split("/")[0] ?? "";
       await updateConfig({
         agent: { ...config?.agent, model },
         [provider]: { apiKey },
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      showToast("设置已保存", "success");
     } catch {
-      // error handled by useConfig
+      showToast("保存失败", "error");
     } finally {
       setSaving(false);
     }
@@ -101,7 +98,7 @@ export function Settings() {
             disabled={saving}
             className="w-full rounded-xl bg-indigo-600 py-3 font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
           >
-            {saving ? "保存中..." : saved ? "已保存" : "保存设置"}
+            {saving ? "保存中..." : "保存设置"}
           </button>
 
           <UpdateChecker />
