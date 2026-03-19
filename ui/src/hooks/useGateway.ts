@@ -43,15 +43,30 @@ export function useGateway(): UseGatewayReturn {
 
     const unsubMessage = ws.onMessage((data: WebSocketMessage) => {
       // Handle OpenClaw chat events (agent responses)
+      // Fields (state, message, runId) are TOP-LEVEL, not inside payload
+      // (verified from OpenClaw source: src/gateway/server-chat.ts)
       if (data.type === "event" && data.event === "chat") {
-        const payload = data.payload as Record<string, unknown> | undefined;
-        if (!payload) return;
+        const d = data as Record<string, unknown>;
+        const state = d.state as string | undefined;
+        const msg = d.message as Record<string, unknown> | undefined;
 
-        const state = payload.state as string;
-        const msg = payload.message as Record<string, unknown> | undefined;
+        // Handle error state (has errorMessage, no message field)
+        if ((state === "error" || state === "aborted") && pendingIdRef.current) {
+          const errorText = (d.errorMessage as string) ?? "请求失败";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === pendingIdRef.current
+                ? { ...m, content: errorText, pending: false, role: "system" }
+                : m,
+            ),
+          );
+          pendingIdRef.current = null;
+          setPending(false);
+          return;
+        }
 
+        // Handle delta: extract text and update message content
         if (msg && pendingIdRef.current) {
-          // Extract text from content array: [{type:"text", text:"..."}]
           const contentArr = msg.content as Array<Record<string, unknown>> | undefined;
           let text = "";
           if (Array.isArray(contentArr)) {
@@ -70,33 +85,13 @@ export function useGateway(): UseGatewayReturn {
           }
         }
 
+        // Handle final: mark message as done
         if (state === "final" && pendingIdRef.current) {
           setMessages((prev) =>
             prev.map((m) => (m.id === pendingIdRef.current ? { ...m, pending: false } : m)),
           );
           pendingIdRef.current = null;
           setPending(false);
-        }
-
-        // Handle agent errors
-        if (state === "final" && msg) {
-          const content = msg.content as Array<Record<string, unknown>> | undefined;
-          if (Array.isArray(content)) {
-            const errorItem = content.find(
-              (c) => c.type === "text" && typeof c.text === "string" && c.text.includes("failed"),
-            );
-            if (errorItem && pendingIdRef.current) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingIdRef.current
-                    ? { ...m, content: String(errorItem.text), pending: false, role: "system" }
-                    : m,
-                ),
-              );
-              pendingIdRef.current = null;
-              setPending(false);
-            }
-          }
         }
         return;
       }
