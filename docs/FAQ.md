@@ -24,9 +24,11 @@
 
 ### Q: 支持哪些 AI 模型？
 
-国内（无需翻墙）：DeepSeek、Kimi (月之暗面)、通义千问、智谱 GLM
+国内（无需翻墙）：MiniMax、DeepSeek、Kimi (月之暗面)、通义千问、智谱 GLM
 
 国际：Claude (Anthropic)、GPT (OpenAI)
+
+共 7 个服务商，每个提供 2-3 个最新模型可选。
 
 ### Q: API Key 从哪里获取？
 
