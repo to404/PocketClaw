@@ -2,6 +2,33 @@ import { useState, useEffect, useCallback } from "react";
 import type { OpenClawConfig } from "../types";
 import { loadConfig, saveConfig } from "../utils/config";
 
+function deepMerge(
+  base: Record<string, unknown>,
+  updates: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base };
+  for (const key of Object.keys(updates)) {
+    const baseVal = base[key];
+    const updateVal = updates[key];
+    if (
+      updateVal !== null &&
+      typeof updateVal === "object" &&
+      !Array.isArray(updateVal) &&
+      baseVal !== null &&
+      typeof baseVal === "object" &&
+      !Array.isArray(baseVal)
+    ) {
+      result[key] = deepMerge(
+        baseVal as Record<string, unknown>,
+        updateVal as Record<string, unknown>,
+      );
+    } else {
+      result[key] = updateVal;
+    }
+  }
+  return result;
+}
+
 interface UseConfigReturn {
   config: OpenClawConfig | null;
   loading: boolean;
@@ -36,9 +63,12 @@ export function useConfig(): UseConfigReturn {
 
   const updateConfig = useCallback(
     async (updates: Partial<OpenClawConfig>) => {
-      const merged = { ...config, ...updates };
-      await saveConfig(merged as OpenClawConfig);
-      setConfig(merged as OpenClawConfig);
+      const merged = deepMerge(
+        (config ?? {}) as Record<string, unknown>,
+        updates as Record<string, unknown>,
+      ) as OpenClawConfig;
+      await saveConfig(merged);
+      setConfig(merged);
     },
     [config],
   );

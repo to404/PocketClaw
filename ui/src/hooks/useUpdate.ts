@@ -5,6 +5,18 @@ import { getVersion } from "../utils/config";
 const GITHUB_REPO = "Austin5925/PocketClaw";
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
+/** Returns >0 if a > b, <0 if a < b, 0 if equal. Handles "v" prefix. */
+function compareSemver(a: string, b: string): number {
+  const parse = (s: string) => s.replace(/^v/, "").split(".").map(Number);
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 interface UseUpdateReturn {
   versionInfo: VersionInfo | null;
   checking: boolean;
@@ -40,7 +52,7 @@ export function useUpdate(): UseUpdateReturn {
       setVersionInfo({
         current,
         latest,
-        updateAvailable: latest ? latest !== current : false,
+        updateAvailable: latest ? compareSemver(latest, current) > 0 : false,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Version check failed");

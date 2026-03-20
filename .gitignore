@@ -1,5 +1,6 @@
 # === 开发内部文档（不公开） ===
 devdocs/
+CLAUDE.md
 
 # === Node.js ===
 node_modules/

@@ -144,14 +144,29 @@ function syncInternalConfig(config) {
   );
 }
 
+/** Mask all apiKey fields in a config object — returns last 4 chars only. */
+function maskApiKeys(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
+  const result = {};
+  for (const key of Object.keys(obj)) {
+    if (key === "apiKey" && typeof obj[key] === "string") {
+      const k = obj[key];
+      result[key] = k.length > 4 ? "****" + k.slice(-4) : "****";
+    } else {
+      result[key] = maskApiKeys(obj[key]);
+    }
+  }
+  return result;
+}
+
 function handleApiConfig(req, res) {
   const configPath = path.join(DATA_DIR, ".openclaw", "openclaw.json");
 
   if (req.method === "GET") {
     try {
-      const config = fs.readFileSync(configPath, "utf-8");
+      const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(config);
+      res.end(JSON.stringify(maskApiKeys(raw)));
     } catch {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Config not found" }));
@@ -160,9 +175,7 @@ function handleApiConfig(req, res) {
   }
 
   if (req.method === "PUT" || req.method === "POST") {
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
+    readBody(req, res, (body) => {
       try {
         const parsed = JSON.parse(body);
         fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -223,9 +236,95 @@ function handleApiHealth(res) {
     });
 }
 
-const PROVIDER_API_URLS = {
-  minimax: "https://api.minimaxi.com/anthropic/v1/messages",
+// Verified endpoints from plan.md Phase 12.2 (curl tested).
+// method=GET uses /models (zero token cost); method=POST uses /messages.
+// auth=bearer → Authorization: Bearer; auth=x-api-key → x-api-key + anthropic-version.
+const PROVIDER_VALIDATORS = {
+  minimax: { url: "https://api.minimaxi.com/anthropic/v1/messages", method: "POST", auth: "x-api-key" },
+  deepseek: { url: "https://api.deepseek.com/models", method: "GET", auth: "bearer" },
+  moonshot: { url: "https://api.moonshot.cn/v1/models", method: "GET", auth: "bearer" },
+  kimi: { url: "https://api.moonshot.cn/v1/models", method: "GET", auth: "bearer" },
+  qwen: { url: "https://dashscope.aliyuncs.com/compatible-mode/v1/models", method: "GET", auth: "bearer" },
+  zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/models", method: "GET", auth: "bearer" },
+  glm: { url: "https://open.bigmodel.cn/api/paas/v4/models", method: "GET", auth: "bearer" },
+  openai: { url: "https://api.openai.com/v1/models", method: "GET", auth: "bearer" },
+  anthropic: { url: "https://api.anthropic.com/v1/messages", method: "POST", auth: "x-api-key" },
 };
+
+const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
+
+function readBody(req, res, callback) {
+  let body = "";
+  let size = 0;
+  req.on("data", (chunk) => {
+    size += chunk.length;
+    if (size > MAX_BODY_SIZE) {
+      res.writeHead(413, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Payload too large" }));
+      req.destroy();
+      return;
+    }
+    body += chunk;
+  });
+  req.on("end", () => callback(body));
+}
+
+function validateKeyRequest(validator, apiKey, model, res) {
+  const https = require("https");
+  const urlObj = new URL(validator.url);
+
+  const headers = { "Content-Type": "application/json" };
+  if (validator.auth === "bearer") {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  } else {
+    headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+  }
+
+  let postData = null;
+  const options = {
+    hostname: urlObj.hostname,
+    path: urlObj.pathname,
+    method: validator.method,
+    headers,
+    timeout: 10000,
+  };
+
+  if (validator.method === "POST") {
+    const modelId = (model || "").split("/")[1] || (validator.auth === "x-api-key" ? "MiniMax-M2.7" : "claude-3-5-haiku-20241022");
+    postData = JSON.stringify({
+      model: modelId,
+      max_tokens: 1,
+      messages: [{ role: "user", content: "hi" }],
+    });
+    options.headers["Content-Length"] = Buffer.byteLength(postData);
+  }
+
+  const apiReq = https.request(options, (apiRes) => {
+    apiRes.resume(); // drain body
+    if (apiRes.statusCode === 401 || apiRes.statusCode === 403) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ valid: false, error: "API Key 无效，请检查后重试" }));
+    } else {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ valid: true }));
+    }
+  });
+
+  apiReq.on("error", () => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ valid: true }));
+  });
+
+  apiReq.on("timeout", () => {
+    apiReq.destroy();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ valid: true }));
+  });
+
+  if (postData) apiReq.write(postData);
+  apiReq.end();
+}
 
 function handleApiValidateKey(req, res) {
   if (req.method !== "POST") {
@@ -234,69 +333,16 @@ function handleApiValidateKey(req, res) {
     return;
   }
 
-  let body = "";
-  req.on("data", (chunk) => (body += chunk));
-  req.on("end", () => {
+  readBody(req, res, (body) => {
     try {
       const { provider, apiKey, model } = JSON.parse(body);
-      const apiUrl = PROVIDER_API_URLS[provider];
-      if (!apiUrl || !apiKey) {
-        // No validation URL for this provider — assume valid
+      const validator = PROVIDER_VALIDATORS[provider];
+      if (!validator || !apiKey) {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ valid: true }));
         return;
       }
-
-      const modelId = (model || "").split("/")[1] || "MiniMax-M2.7";
-      const https = require("https");
-      const postData = JSON.stringify({
-        model: modelId,
-        max_tokens: 1,
-        messages: [{ role: "user", content: "hi" }],
-      });
-
-      const urlObj = new URL(apiUrl);
-      const options = {
-        hostname: urlObj.hostname,
-        path: urlObj.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "Content-Length": Buffer.byteLength(postData),
-        },
-        timeout: 10000,
-      };
-
-      const apiReq = https.request(options, (apiRes) => {
-        let data = "";
-        apiRes.on("data", (chunk) => (data += chunk));
-        apiRes.on("end", () => {
-          if (apiRes.statusCode === 401) {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ valid: false, error: "API Key 无效，请检查后重试" }));
-          } else {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ valid: true }));
-          }
-        });
-      });
-
-      apiReq.on("error", () => {
-        // Network error — skip validation, assume valid
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ valid: true }));
-      });
-
-      apiReq.on("timeout", () => {
-        apiReq.destroy();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ valid: true }));
-      });
-
-      apiReq.write(postData);
-      apiReq.end();
+      validateKeyRequest(validator, apiKey, model, res);
     } catch {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Invalid request" }));
@@ -327,7 +373,7 @@ server.on("upgrade", (req, socket, head) => {
   createProxyServer(req, socket, head, GATEWAY_HOST, GATEWAY_PORT);
 });
 
-server.listen(UI_PORT, () => {
+server.listen(UI_PORT, "127.0.0.1", () => {
   console.log(`[PocketClaw UI] Server running at http://localhost:${UI_PORT}`);
   console.log(
     `[PocketClaw UI] Gateway proxy: ws://localhost:${UI_PORT}/ws -> ws://${GATEWAY_HOST}:${GATEWAY_PORT}`,

@@ -59,6 +59,7 @@ export function useGateway(): UseGatewayReturn {
   const runIdToMsgId = useRef<Map<string, string>>(new Map());
   const sessionKeyRef = useRef(mainSessionKey);
   const sendRpcRef = useRef(sendRpc);
+  const sendTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     sendRpcRef.current = sendRpc;
@@ -127,6 +128,11 @@ export function useGateway(): UseGatewayReturn {
 
           if (!runIdToMsgId.current.has(runId)) {
             // New run (own send or from advanced mode) — create assistant bubble
+            // Clear send timeout: we got a response
+            if (sendTimeoutRef.current) {
+              clearTimeout(sendTimeoutRef.current);
+              sendTimeoutRef.current = null;
+            }
             const newId = makeId();
             runIdToMsgId.current.set(runId, newId);
             setPending(true);
@@ -249,6 +255,28 @@ export function useGateway(): UseGatewayReturn {
       { id: makeId(), role: "user", content: content.trim(), timestamp: Date.now() },
     ]);
     setPending(true);
+    // Clear any existing send timeout before starting a new one
+    if (sendTimeoutRef.current) {
+      clearTimeout(sendTimeoutRef.current);
+    }
+    // 60s timeout: if no delta arrives, clear pending and show error
+    sendTimeoutRef.current = setTimeout(() => {
+      sendTimeoutRef.current = null;
+      if (runIdToMsgId.current.size === 0) {
+        // No response started — add a timeout error message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: makeId(),
+            role: "system",
+            content: "请求超时，请重试",
+            timestamp: Date.now(),
+            pending: false,
+          },
+        ]);
+        setPending(false);
+      }
+    }, 60000);
     // Assistant bubble is created when first delta event arrives (gateway-driven)
     sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
