@@ -52,7 +52,11 @@ export function GatewayProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const onMessage = useCallback((handler: (data: WebSocketMessage) => void) => {
-    if (!wsRef.current) return () => {};
+    if (!wsRef.current) {
+      console.warn("[PocketClaw] onMessage called but wsRef is null");
+      return () => {};
+    }
+    console.log("[PocketClaw] onMessage handler registered");
     return wsRef.current.onMessage(handler);
   }, []);
 

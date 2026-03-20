@@ -67,6 +67,11 @@ export function useGateway(): UseGatewayReturn {
 
   useEffect(() => {
     const unsub = onMessage((data: WebSocketMessage) => {
+      // Debug: log all received messages to help diagnose event routing
+      if (data.type === "event") {
+        console.log("[PocketClaw] event received:", data.event, data);
+      }
+
       // Handle OpenClaw chat events (agent responses)
       // Fields (state, message, runId) are TOP-LEVEL, not inside payload
       // (verified from OpenClaw source: src/gateway/server-chat.ts)
