@@ -67,22 +67,22 @@ export function useGateway(): UseGatewayReturn {
 
   useEffect(() => {
     const unsub = onMessage((data: WebSocketMessage) => {
-      // Debug: log all received messages to help diagnose event routing
-      if (data.type === "event") {
-        console.log("[PocketClaw] event received:", data.event, data);
-      }
-
       // Handle OpenClaw chat events (agent responses)
-      // Fields (state, message, runId) are TOP-LEVEL, not inside payload
-      // (verified from OpenClaw source: src/gateway/server-chat.ts)
+      // Event format: { type: "event", event: "chat", payload: { sessionKey, runId, state, message, errorMessage } }
+      // state/message/runId/sessionKey are inside payload (verified from OpenClaw control-ui source)
       if (data.type === "event" && data.event === "chat") {
-        const d = data as Record<string, unknown>;
-        const state = d.state as string | undefined;
-        const msg = d.message as Record<string, unknown> | undefined;
+        const p = data.payload as Record<string, unknown> | undefined;
+        if (!p) return;
 
-        // Handle error state (has errorMessage, no message field)
+        // Filter events for the current session
+        if (p.sessionKey && p.sessionKey !== sessionKeyRef.current) return;
+
+        const state = p.state as string | undefined;
+        const msg = p.message as Record<string, unknown> | undefined;
+
+        // Handle error/aborted state
         if ((state === "error" || state === "aborted") && pendingIdRef.current) {
-          const errorText = (d.errorMessage as string) ?? "请求失败";
+          const errorText = (p.errorMessage as string) ?? "请求失败";
           setMessages((prev) =>
             prev.map((m) =>
               m.id === pendingIdRef.current
@@ -95,8 +95,8 @@ export function useGateway(): UseGatewayReturn {
           return;
         }
 
-        // Handle delta: extract text and update message content
-        if (msg && pendingIdRef.current) {
+        // Handle delta: text is cumulative full content (not incremental chunk)
+        if (state === "delta" && msg && pendingIdRef.current) {
           const contentArr = msg.content as Array<Record<string, unknown>> | undefined;
           let text = "";
           if (Array.isArray(contentArr)) {
@@ -117,9 +117,38 @@ export function useGateway(): UseGatewayReturn {
 
         // Handle final: mark message as done
         if (state === "final" && pendingIdRef.current) {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === pendingIdRef.current ? { ...m, pending: false } : m)),
-          );
+          // If final has message content, update it first
+          if (msg) {
+            const contentArr = msg.content as Array<Record<string, unknown>> | undefined;
+            let text = "";
+            if (Array.isArray(contentArr)) {
+              text = contentArr
+                .filter((c) => c.type === "text")
+                .map((c) => (c.text as string) ?? "")
+                .join("");
+            } else if (typeof msg.content === "string") {
+              text = msg.content;
+            }
+            if (text) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingIdRef.current
+                    ? { ...m, content: text, pending: false }
+                    : m,
+                ),
+              );
+            } else {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingIdRef.current ? { ...m, pending: false } : m,
+                ),
+              );
+            }
+          } else {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === pendingIdRef.current ? { ...m, pending: false } : m)),
+            );
+          }
           pendingIdRef.current = null;
           setPending(false);
         }
