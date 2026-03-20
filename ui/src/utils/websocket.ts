@@ -1,5 +1,5 @@
 type MessageHandler = (data: WebSocketMessage) => void;
-type StatusHandler = (connected: boolean, error?: string) => void;
+type StatusHandler = (connected: boolean, error?: string, mainSessionKey?: string) => void;
 
 export interface WebSocketMessage {
   type: string;
@@ -50,10 +50,16 @@ export class GatewayWebSocket {
         }
 
         // Step 2: Receive hello-ok, connection established
+        // hello-ok payload: { type: "hello-ok", snapshot: { sessionDefaults: { mainSessionKey } } }
         if (data.type === "res" && (data.payload as Record<string, unknown>)?.type === "hello-ok") {
+          const snapshot = (data.payload as Record<string, unknown>)?.snapshot as
+            | Record<string, unknown>
+            | undefined;
+          const sessionDefaults = snapshot?.sessionDefaults as Record<string, unknown> | undefined;
+          const mainSessionKey = sessionDefaults?.mainSessionKey as string | undefined;
           this.handshakeComplete = true;
           this.reconnectAttempts = 0;
-          this.notifyStatus(true);
+          this.notifyStatus(true, undefined, mainSessionKey);
           return;
         }
 
@@ -175,8 +181,8 @@ export class GatewayWebSocket {
     return this.ws?.readyState === WebSocket.OPEN && this.handshakeComplete;
   }
 
-  private notifyStatus(connected: boolean, error?: string): void {
-    this.statusHandlers.forEach((handler) => handler(connected, error));
+  private notifyStatus(connected: boolean, error?: string, mainSessionKey?: string): void {
+    this.statusHandlers.forEach((handler) => handler(connected, error, mainSessionKey));
   }
 
   private scheduleReconnect(): void {

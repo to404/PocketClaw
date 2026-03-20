@@ -35,17 +35,31 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 
-const DEFAULT_SESSION = "agent:main:main";
+/** Extract plain text from a gateway message object */
+function extractText(msg: Record<string, unknown>): string {
+  const content = msg.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return (content as Array<Record<string, unknown>>)
+      .filter((c) => c.type === "text")
+      .map((c) => (c.text as string) ?? "")
+      .join("");
+  }
+  return "";
+}
 
 export function useGateway(): UseGatewayReturn {
-  const { connected, connectionError, sendRpc, onMessage } = useGatewayConnection();
+  const { connected, connectionError, mainSessionKey, sendRpc, onMessage } = useGatewayConnection();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
-  const [currentSessionKey, setCurrentSessionKey] = useState(DEFAULT_SESSION);
+  const [currentSessionKey, setCurrentSessionKey] = useState(mainSessionKey);
   const [sessionList, setSessionList] = useState<SessionListItem[]>([]);
-  const pendingIdRef = useRef<string | null>(null);
-  const sessionKeyRef = useRef(DEFAULT_SESSION);
+
+  // runId → local message ID (tracks all active AI streams, own + from other clients)
+  const runIdToMsgId = useRef<Map<string, string>>(new Map());
+  const sessionKeyRef = useRef(mainSessionKey);
   const sendRpcRef = useRef(sendRpc);
+
   useEffect(() => {
     sendRpcRef.current = sendRpc;
   }, [sendRpc]);
@@ -54,7 +68,15 @@ export function useGateway(): UseGatewayReturn {
     sessionKeyRef.current = currentSessionKey;
   }, [currentSessionKey]);
 
-  // Load session list when connected
+  // Sync session key from hello-ok snapshot when gateway connects
+  useEffect(() => {
+    if (mainSessionKey && mainSessionKey !== sessionKeyRef.current) {
+      setCurrentSessionKey(mainSessionKey);
+      sessionKeyRef.current = mainSessionKey;
+    }
+  }, [mainSessionKey]);
+
+  // On connect: load sessions list + history for current session
   useEffect(() => {
     if (connected) {
       sendRpc("sessions.list", {
@@ -62,100 +84,88 @@ export function useGateway(): UseGatewayReturn {
         includeDerivedTitles: true,
         includeLastMessage: true,
       });
+      sendRpc("chat.history", {
+        sessionKey: sessionKeyRef.current,
+        limit: 200,
+      });
     }
   }, [connected, sendRpc]);
 
   useEffect(() => {
     const unsub = onMessage((data: WebSocketMessage) => {
-      // Handle OpenClaw chat events (agent responses)
-      // Event format: { type: "event", event: "chat", payload: { sessionKey, runId, state, message, errorMessage } }
-      // state/message/runId/sessionKey are inside payload (verified from OpenClaw control-ui source)
+      // ── Chat events ──────────────────────────────────────────────────────────
+      // Format (verified from OpenClaw control-ui source):
+      //   { type:"event", event:"chat", payload:{ sessionKey, runId, state, message, errorMessage } }
+      // - Delta text is CUMULATIVE (each event has the full text so far)
+      // - We track by runId so we handle events from both simple and advanced mode
       if (data.type === "event" && data.event === "chat") {
         const p = data.payload as Record<string, unknown> | undefined;
         if (!p) return;
 
-        // Filter events for the current session
-        if (p.sessionKey && p.sessionKey !== sessionKeyRef.current) return;
-
         const state = p.state as string | undefined;
         const msg = p.message as Record<string, unknown> | undefined;
+        const runId = p.runId as string | undefined;
 
-        // Handle error/aborted state
-        if ((state === "error" || state === "aborted") && pendingIdRef.current) {
-          const errorText = (p.errorMessage as string) ?? "请求失败";
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === pendingIdRef.current
-                ? { ...m, content: errorText, pending: false, role: "system" }
-                : m,
-            ),
-          );
-          pendingIdRef.current = null;
-          setPending(false);
+        if (state === "error" || state === "aborted") {
+          if (runId && runIdToMsgId.current.has(runId)) {
+            const msgId = runIdToMsgId.current.get(runId)!;
+            const errorText = (p.errorMessage as string) ?? "请求失败";
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msgId ? { ...m, content: errorText, pending: false, role: "system" } : m,
+              ),
+            );
+            runIdToMsgId.current.delete(runId);
+            if (runIdToMsgId.current.size === 0) setPending(false);
+          }
           return;
         }
 
-        // Handle delta: text is cumulative full content (not incremental chunk)
-        if (state === "delta" && msg && pendingIdRef.current) {
-          const contentArr = msg.content as Array<Record<string, unknown>> | undefined;
-          let text = "";
-          if (Array.isArray(contentArr)) {
-            text = contentArr
-              .filter((c) => c.type === "text")
-              .map((c) => (c.text as string) ?? "")
-              .join("");
-          } else if (typeof msg.content === "string") {
-            text = msg.content;
-          }
+        if (state === "delta" && msg) {
+          const text = extractText(msg);
+          if (!runId) return;
 
-          if (text) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === pendingIdRef.current ? { ...m, content: text } : m)),
-            );
+          if (!runIdToMsgId.current.has(runId)) {
+            // New run (own send or from advanced mode) — create assistant bubble
+            const newId = makeId();
+            runIdToMsgId.current.set(runId, newId);
+            setPending(true);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: newId,
+                role: "assistant",
+                content: text,
+                timestamp: Date.now(),
+                pending: true,
+              },
+            ]);
+          } else if (text) {
+            // Update existing bubble (cumulative — replace, not append)
+            const msgId = runIdToMsgId.current.get(runId)!;
+            setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, content: text } : m)));
           }
+          return;
         }
 
-        // Handle final: mark message as done
-        if (state === "final" && pendingIdRef.current) {
-          // If final has message content, update it first
-          if (msg) {
-            const contentArr = msg.content as Array<Record<string, unknown>> | undefined;
-            let text = "";
-            if (Array.isArray(contentArr)) {
-              text = contentArr
-                .filter((c) => c.type === "text")
-                .map((c) => (c.text as string) ?? "")
-                .join("");
-            } else if (typeof msg.content === "string") {
-              text = msg.content;
-            }
-            if (text) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingIdRef.current
-                    ? { ...m, content: text, pending: false }
-                    : m,
-                ),
-              );
-            } else {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === pendingIdRef.current ? { ...m, pending: false } : m,
-                ),
-              );
-            }
-          } else {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === pendingIdRef.current ? { ...m, pending: false } : m)),
-            );
-          }
-          pendingIdRef.current = null;
-          setPending(false);
+        if (state === "final") {
+          if (!runId || !runIdToMsgId.current.has(runId)) return;
+          const msgId = runIdToMsgId.current.get(runId)!;
+          const text = msg ? extractText(msg) : "";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, ...(text ? { content: text } : {}), pending: false } : m,
+            ),
+          );
+          runIdToMsgId.current.delete(runId);
+          if (runIdToMsgId.current.size === 0) setPending(false);
+          return;
         }
+
         return;
       }
 
-      // Handle RPC responses (sessions.create, sessions.get, sessions.list, etc.)
+      // ── RPC responses ────────────────────────────────────────────────────────
       if (data.type === "res" && (data as Record<string, unknown>).ok) {
         const payload = data.payload as Record<string, unknown> | undefined;
 
@@ -180,8 +190,7 @@ export function useGateway(): UseGatewayReturn {
           sessionKeyRef.current = newKey;
           setMessages([]);
           setPending(false);
-          pendingIdRef.current = null;
-          // Refresh session list
+          runIdToMsgId.current.clear();
           sendRpcRef.current("sessions.list", {
             limit: 20,
             includeDerivedTitles: true,
@@ -190,35 +199,24 @@ export function useGateway(): UseGatewayReturn {
           return;
         }
 
-        // sessions.get / chat.history response
+        // chat.history response — replace messages with loaded history
         if (payload?.messages && Array.isArray(payload.messages)) {
           const history = (payload.messages as Array<Record<string, unknown>>)
             .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m) => {
-              let text = "";
-              if (typeof m.content === "string") {
-                text = m.content;
-              } else if (Array.isArray(m.content)) {
-                text = (m.content as Array<Record<string, unknown>>)
-                  .filter((c) => c.type === "text")
-                  .map((c) => (c.text as string) ?? "")
-                  .join("");
-              }
-              return {
-                id: makeId(),
-                role: m.role as "user" | "assistant",
-                content: text,
-                timestamp: (m.timestamp as number) ?? Date.now(),
-              } satisfies ChatMessage;
-            });
+            .map((m) => ({
+              id: makeId(),
+              role: m.role as "user" | "assistant",
+              content: extractText(m),
+              timestamp: (m.timestamp as number) ?? Date.now(),
+            }));
           setMessages(history);
+          return;
         }
-        return;
       }
 
-      // Handle RPC error responses
+      // ── RPC errors ───────────────────────────────────────────────────────────
       if (data.type === "res" && !(data as Record<string, unknown>).ok) {
-        if (pendingIdRef.current) {
+        if (runIdToMsgId.current.size > 0) {
           const errPayload = (data as Record<string, unknown>).error as
             | Record<string, unknown>
             | undefined;
@@ -226,14 +224,15 @@ export function useGateway(): UseGatewayReturn {
             (errPayload?.message as string) ??
             ((data.payload as Record<string, unknown> | undefined)?.message as string) ??
             "请求失败";
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === pendingIdRef.current
-                ? { ...m, content: errMsg, pending: false, role: "system" }
-                : m,
-            ),
-          );
-          pendingIdRef.current = null;
+          // Mark all pending messages as error (covers concurrent edge cases)
+          runIdToMsgId.current.forEach((msgId) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msgId ? { ...m, content: errMsg, pending: false, role: "system" } : m,
+              ),
+            );
+          });
+          runIdToMsgId.current.clear();
           setPending(false);
         }
       }
@@ -244,27 +243,13 @@ export function useGateway(): UseGatewayReturn {
 
   const sendMessage = useCallback((content: string) => {
     if (!content.trim()) return;
-
-    const userMsg: ChatMessage = {
-      id: makeId(),
-      role: "user",
-      content: content.trim(),
-      timestamp: Date.now(),
-    };
-
-    const assistantId = makeId();
-    const assistantMsg: ChatMessage = {
-      id: assistantId,
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      pending: true,
-    };
-
-    pendingIdRef.current = assistantId;
+    // Create user message locally for immediate feedback
+    setMessages((prev) => [
+      ...prev,
+      { id: makeId(), role: "user", content: content.trim(), timestamp: Date.now() },
+    ]);
     setPending(true);
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
-
+    // Assistant bubble is created when first delta event arrives (gateway-driven)
     sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
       message: content.trim(),
@@ -275,39 +260,19 @@ export function useGateway(): UseGatewayReturn {
 
   const regenerate = useCallback(() => {
     if (pending) return;
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content;
     if (!lastUserMsg) return;
-
+    // Remove last assistant message
     setMessages((prev) => {
-      let lastIdx = -1;
       for (let i = prev.length - 1; i >= 0; i--) {
-        if (prev[i]?.role === "assistant") {
-          lastIdx = i;
-          break;
-        }
-      }
-      if (lastIdx >= 0) {
-        return prev.filter((_, i) => i !== lastIdx);
+        if (prev[i]?.role === "assistant") return prev.filter((_, idx) => idx !== i);
       }
       return prev;
     });
-
-    const assistantId = makeId();
-    const assistantMsg: ChatMessage = {
-      id: assistantId,
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      pending: true,
-    };
-
-    pendingIdRef.current = assistantId;
     setPending(true);
-    setMessages((prev) => [...prev, assistantMsg]);
-
     sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
-      message: lastUserMsg.content,
+      message: lastUserMsg,
       deliver: false,
       idempotencyKey: uuid(),
     });
@@ -316,8 +281,7 @@ export function useGateway(): UseGatewayReturn {
   const clearMessages = useCallback(() => {
     setMessages([]);
     setPending(false);
-    pendingIdRef.current = null;
-    // Reset session on the server
+    runIdToMsgId.current.clear();
     sendRpcRef.current("sessions.reset", {
       key: sessionKeyRef.current,
       reason: "new",
@@ -329,7 +293,7 @@ export function useGateway(): UseGatewayReturn {
     sessionKeyRef.current = key;
     setMessages([]);
     setPending(false);
-    pendingIdRef.current = null;
+    runIdToMsgId.current.clear();
   }, []);
 
   const createSession = useCallback((label?: string) => {

@@ -91,7 +91,7 @@ describe("useGateway", () => {
     expect(result.current.connected).toBe(true);
   });
 
-  it("sends a message and creates placeholder", () => {
+  it("sends a message and creates user bubble immediately, marks pending", () => {
     const { result } = renderHook(() => useGateway(), { wrapper: Wrapper });
 
     const ws = getLatestWs();
@@ -103,12 +103,60 @@ describe("useGateway", () => {
       result.current.sendMessage("Hello");
     });
 
-    expect(result.current.messages).toHaveLength(2);
+    // Gateway-driven: only user message is created locally; assistant bubble
+    // appears when the first delta event arrives from the gateway.
+    expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0]?.role).toBe("user");
     expect(result.current.messages[0]?.content).toBe("Hello");
-    expect(result.current.messages[1]?.role).toBe("assistant");
-    expect(result.current.messages[1]?.pending).toBe(true);
     expect(result.current.pending).toBe(true);
+  });
+
+  it("creates assistant bubble on delta event and resolves on final", () => {
+    const { result } = renderHook(() => useGateway(), { wrapper: Wrapper });
+
+    const ws = getLatestWs();
+    act(() => {
+      ws.simulateHandshake();
+    });
+
+    act(() => {
+      result.current.sendMessage("Hello");
+    });
+
+    // Simulate delta event from gateway
+    act(() => {
+      ws.simulateMessage({
+        type: "event",
+        event: "chat",
+        payload: {
+          runId: "run-abc",
+          state: "delta",
+          message: { role: "assistant", content: [{ type: "text", text: "Hi there" }] },
+        },
+      });
+    });
+
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[1]?.role).toBe("assistant");
+    expect(result.current.messages[1]?.content).toBe("Hi there");
+    expect(result.current.messages[1]?.pending).toBe(true);
+
+    // Simulate final event
+    act(() => {
+      ws.simulateMessage({
+        type: "event",
+        event: "chat",
+        payload: {
+          runId: "run-abc",
+          state: "final",
+          message: { role: "assistant", content: [{ type: "text", text: "Hi there!" }] },
+        },
+      });
+    });
+
+    expect(result.current.messages[1]?.content).toBe("Hi there!");
+    expect(result.current.messages[1]?.pending).toBe(false);
+    expect(result.current.pending).toBe(false);
   });
 
   it("clears messages", () => {
@@ -123,7 +171,7 @@ describe("useGateway", () => {
       result.current.sendMessage("Hello");
     });
 
-    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages).toHaveLength(1);
 
     act(() => {
       result.current.clearMessages();
