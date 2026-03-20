@@ -90,6 +90,10 @@ jobs:
           chmod +x "../portable/启动PocketClaw.app/Contents/MacOS/PocketClaw-arm64"
           chmod +x "../portable/启动PocketClaw.app/Contents/MacOS/PocketClaw-x64"
 
+      - name: Sign Mac app (ad-hoc)
+        run: |
+          codesign --force --deep --sign - "portable/启动PocketClaw.app"
+
       - name: Create Mac package
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
