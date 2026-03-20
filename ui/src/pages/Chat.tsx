@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { ChatBubble } from "../components/ChatBubble";
 import { MainLayout } from "../layouts/MainLayout";
 import { useGateway } from "../hooks/useGateway";
@@ -18,16 +18,7 @@ const SUGGESTIONS = [
 ];
 
 export function Chat() {
-  const navigate = useNavigate();
-  const { config, loading, isConfigured, updateConfig } = useConfig();
-
-  // Redirect to onboarding if not configured (no model or no API key)
-  useEffect(() => {
-    if (!loading && !isConfigured) {
-      navigate("/onboarding");
-    }
-  }, [loading, isConfigured, navigate]);
-
+  const { config, updateConfig } = useConfig();
   const {
     connected,
     connectionError,
