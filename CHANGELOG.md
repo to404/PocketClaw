@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.21] - 2026-03-20
+
+### Security
+
+- **Real Ed25519 device identity**: Browser now generates a persistent Ed25519 keypair (localStorage), signs gateway challenges with the correct payload (clientId, clientMode, scopes verified from OpenClaw source), and removes `dangerouslyDisableDeviceAuth` — Phase 14.2
+
+### Changed
+
+- `websocket.ts`: `sendConnectFrame` is now async; adds `deviceFamily: "desktop"` to connect frame
+
 ## [1.1.20] - 2026-03-20
 
 ### Fixed
