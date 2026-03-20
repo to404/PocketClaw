@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.25] - 2026-03-20
+
+### Fixed
+
+- **Prettier format**: `websocket.ts` long string literal was wrapped by Prettier (signature fallback value). No logic change.
+
 ## [1.1.24] - 2026-03-20
 
 ### Fixed
