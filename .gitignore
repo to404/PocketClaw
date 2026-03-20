@@ -1,5 +1,6 @@
 # === 开发内部文档（不公开） ===
 devdocs/
+postmortem/
 CLAUDE.md
 
 # === Node.js ===

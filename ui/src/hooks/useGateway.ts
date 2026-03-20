@@ -35,6 +35,20 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 
+/** Strip OpenClaw envelope metadata prefixes from session titles / previews.
+ *  OpenClaw wraps user messages with "Sender (untrusted metadata): ..." in transcripts,
+ *  and deriveSessionTitle reads the first user message — which includes the envelope. */
+function stripEnvelope(text: string | undefined): string | undefined {
+  if (!text) return text;
+  // Remove known envelope prefixes (case-insensitive, multiline)
+  return (
+    text
+      .replace(/^Sender\s*\(untrusted metadata\)\s*:\s*/i, "")
+      .replace(/^Conversation info\s*\(untrusted metadata\)\s*:\s*/i, "")
+      .trim() || undefined
+  );
+}
+
 /** Extract plain text from a gateway message object */
 function extractText(msg: Record<string, unknown>): string {
   const content = msg.content;
@@ -57,6 +71,8 @@ export function useGateway(): UseGatewayReturn {
 
   // runId → local message ID (tracks all active AI streams, own + from other clients)
   const runIdToMsgId = useRef<Map<string, string>>(new Map());
+  // Track runIds WE initiated (our idempotencyKeys) to detect cross-client messages
+  const ownRunIds = useRef<Set<string>>(new Set());
   const sessionKeyRef = useRef(mainSessionKey);
   const sendRpcRef = useRef(sendRpc);
   const sendTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,11 +163,19 @@ export function useGateway(): UseGatewayReturn {
           if (!runId) return;
 
           if (!runIdToMsgId.current.has(runId)) {
-            // New run (own send or from advanced mode) — create assistant bubble
+            // New run — create assistant bubble
             // Clear send timeout: we got a response
             if (sendTimeoutRef.current) {
               clearTimeout(sendTimeoutRef.current);
               sendTimeoutRef.current = null;
+            }
+            // Cross-client sync: if this run is from another client, reload
+            // chat.history to get the user message that triggered it
+            if (!ownRunIds.current.has(runId)) {
+              sendRpcRef.current("chat.history", {
+                sessionKey: sessionKeyRef.current,
+                limit: 200,
+              });
             }
             const newId = makeId();
             runIdToMsgId.current.set(runId, newId);
@@ -239,8 +263,8 @@ export function useGateway(): UseGatewayReturn {
             (payload.sessions as Array<Record<string, unknown>>).map((s) => ({
               key: s.key as string,
               displayName: s.displayName as string | undefined,
-              derivedTitle: s.derivedTitle as string | undefined,
-              lastMessagePreview: s.lastMessagePreview as string | undefined,
+              derivedTitle: stripEnvelope(s.derivedTitle as string | undefined),
+              lastMessagePreview: stripEnvelope(s.lastMessagePreview as string | undefined),
               updatedAt: s.updatedAt as number | undefined,
             })),
           );
@@ -267,12 +291,16 @@ export function useGateway(): UseGatewayReturn {
         if (payload?.messages && Array.isArray(payload.messages)) {
           const history = (payload.messages as Array<Record<string, unknown>>)
             .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m) => ({
-              id: makeId(),
-              role: m.role as "user" | "assistant",
-              content: extractText(m),
-              timestamp: (m.timestamp as number) ?? Date.now(),
-            }));
+            .map((m) => {
+              const text = extractText(m);
+              return {
+                id: makeId(),
+                role: m.role as "user" | "assistant",
+                // Strip envelope metadata that OpenClaw wraps around user messages
+                content: m.role === "user" ? (stripEnvelope(text) ?? text) : text,
+                timestamp: (m.timestamp as number) ?? Date.now(),
+              };
+            });
           setMessages(history);
           return;
         }
@@ -356,11 +384,13 @@ export function useGateway(): UseGatewayReturn {
       }
     }, 60000);
     // Assistant bubble is created when first delta event arrives (gateway-driven)
+    const key = uuid();
+    ownRunIds.current.add(key);
     sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
       message: content.trim(),
       deliver: false,
-      idempotencyKey: uuid(),
+      idempotencyKey: key,
     });
   }, []);
 
@@ -393,11 +423,13 @@ export function useGateway(): UseGatewayReturn {
         setPending(false);
       }
     }, 60000);
+    const key = uuid();
+    ownRunIds.current.add(key);
     sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
       message: lastUserMsg,
       deliver: false,
-      idempotencyKey: uuid(),
+      idempotencyKey: key,
     });
   }, [messages, pending]);
 
@@ -405,6 +437,7 @@ export function useGateway(): UseGatewayReturn {
     setMessages([]);
     setPending(false);
     runIdToMsgId.current.clear();
+    ownRunIds.current.clear();
     sendRpcRef.current("sessions.reset", {
       key: sessionKeyRef.current,
       reason: "new",
@@ -417,6 +450,7 @@ export function useGateway(): UseGatewayReturn {
     setMessages([]);
     setPending(false);
     runIdToMsgId.current.clear();
+    ownRunIds.current.clear();
   }, []);
 
   const createSession = useCallback((label?: string) => {

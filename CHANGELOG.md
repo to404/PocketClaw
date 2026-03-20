@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.27] - 2026-03-20
+
+### Fixed
+
+- **Cross-client user message sync**: Simple mode now reloads chat history when receiving AI responses initiated by another client (advanced mode), so user questions appear on both sides
+- **"Sender (untrusted metadata)" in sidebar**: Stripped OpenClaw envelope metadata prefixes from session titles and message previews — sidebar now shows clean user text instead of internal transcript markup
+- **Envelope in chat history**: User messages loaded from history are cleaned of envelope prefixes for display
+
 ## [1.1.26] - 2026-03-20
 
 ### Fixed
