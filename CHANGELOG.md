@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.20] - 2026-03-20
+
+### Fixed
+
+- **Sidebar real-time updates**: Session list now refreshes immediately after each `chat.final` event so `lastMessagePreview` and `updatedAt` reflect the latest message — Phase 16.4
+
+### Added
+
+- **macOS ad-hoc codesign**: CI now runs `codesign --force --deep --sign -` on the .app bundle, allowing Gatekeeper bypass via right-click → Open — Phase 13.3
+- **system/package.json**: Node.js >=22 engine requirement prevents silent breakage on upgrades — Phase 15.4
+- **shared-config.json**: Single source of truth for all 9 provider IDs, env vars, validation URLs, and MiniMax model list; server.js and launcher both load from it — Phase 15.5
+
 ## [1.1.19] - 2026-03-20
 
 ### Fixed
