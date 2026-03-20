@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.30] - 2026-03-20
+
+### Fixed
+
+- **chat.send requires idempotencyKey**: v1.1.29 removed `idempotencyKey` from `chat.send` params alongside the `ownRunIds` cleanup — but it's a required field in OpenClaw's RPC schema. Restored as `crypto.randomUUID()` (generated per-call, not tracked). This was never the regression cause in v1.1.27/v1.1.28 (that was `ownRunIds` triggering `chat.history` reload); v1.1.29 introduced a NEW error by over-removing.
+
 ## [1.1.29] - 2026-03-20
 
 ### Fixed

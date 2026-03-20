@@ -374,6 +374,7 @@ export function useGateway(): UseGatewayReturn {
       sessionKey: sessionKeyRef.current,
       message: content.trim(),
       deliver: false,
+      idempotencyKey: crypto.randomUUID(),
     });
   }, []);
 
@@ -410,6 +411,7 @@ export function useGateway(): UseGatewayReturn {
       sessionKey: sessionKeyRef.current,
       message: lastUserMsg,
       deliver: false,
+      idempotencyKey: crypto.randomUUID(),
     });
   }, [messages, pending]);
 
