@@ -28,17 +28,10 @@ const MIME_TYPES = {
   ".ttf": "font/ttf",
 };
 
-const KNOWN_PROVIDERS = [
-  "minimax",
-  "deepseek",
-  "kimi",
-  "moonshot",
-  "qwen",
-  "anthropic",
-  "openai",
-  "glm",
-  "zhipu",
-];
+const SHARED_CONFIG = JSON.parse(
+  fs.readFileSync(path.join(SCRIPT_DIR, "shared-config.json"), "utf-8"),
+);
+const KNOWN_PROVIDERS = SHARED_CONFIG.providers.map((p) => p.id);
 
 function serveStatic(res, filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -124,16 +117,12 @@ function syncInternalConfig(config) {
   if (!internal.models) internal.models = {};
   if (!internal.models.providers) internal.models.providers = {};
   const minimaxApiKey = config.minimax?.apiKey;
+  const minimaxCfg = SHARED_CONFIG.minimax;
   internal.models.providers.minimax = {
-    baseUrl: "https://api.minimaxi.com/anthropic",
+    baseUrl: minimaxCfg.baseUrl,
     apiKey: minimaxApiKey ?? undefined,
-    api: "anthropic-messages",
-    models: [
-      { id: "MiniMax-M2.7", name: "MiniMax M2.7" },
-      { id: "MiniMax-M2.7-highspeed", name: "MiniMax M2.7 Highspeed" },
-      { id: "MiniMax-M2.5", name: "MiniMax M2.5" },
-      { id: "MiniMax-M2.5-highspeed", name: "MiniMax M2.5 Highspeed" },
-    ],
+    api: minimaxCfg.api,
+    models: minimaxCfg.models,
   };
 
   fs.mkdirSync(internalDir, { recursive: true });
@@ -236,20 +225,13 @@ function handleApiHealth(res) {
     });
 }
 
-// Verified endpoints from plan.md Phase 12.2 (curl tested).
-// method=GET uses /models (zero token cost); method=POST uses /messages.
-// auth=bearer → Authorization: Bearer; auth=x-api-key → x-api-key + anthropic-version.
-const PROVIDER_VALIDATORS = {
-  minimax: { url: "https://api.minimaxi.com/anthropic/v1/messages", method: "POST", auth: "x-api-key" },
-  deepseek: { url: "https://api.deepseek.com/models", method: "GET", auth: "bearer" },
-  moonshot: { url: "https://api.moonshot.cn/v1/models", method: "GET", auth: "bearer" },
-  kimi: { url: "https://api.moonshot.cn/v1/models", method: "GET", auth: "bearer" },
-  qwen: { url: "https://dashscope.aliyuncs.com/compatible-mode/v1/models", method: "GET", auth: "bearer" },
-  zhipu: { url: "https://open.bigmodel.cn/api/paas/v4/models", method: "GET", auth: "bearer" },
-  glm: { url: "https://open.bigmodel.cn/api/paas/v4/models", method: "GET", auth: "bearer" },
-  openai: { url: "https://api.openai.com/v1/models", method: "GET", auth: "bearer" },
-  anthropic: { url: "https://api.anthropic.com/v1/messages", method: "POST", auth: "x-api-key" },
-};
+// Loaded from shared-config.json (single source of truth for providers).
+const PROVIDER_VALIDATORS = Object.fromEntries(
+  SHARED_CONFIG.providers.map((p) => [
+    p.id,
+    { url: p.validateUrl, method: p.validateMethod, auth: p.validateAuth },
+  ]),
+);
 
 const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 

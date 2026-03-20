@@ -346,9 +346,8 @@ func syncConfigToOpenClaw() {
 	}
 
 	// Override MiniMax base URL to China endpoint (api.minimaxi.com).
-	// OpenClaw defaults to api.minimax.io (international), but Chinese platform
-	// API keys only work on the CN endpoint. Must include ALL required fields
-	// (baseUrl, api, models) to pass Zod strict validation.
+	// Config loaded from system/shared-config.json (single source of truth).
+	// Must include ALL required fields (baseUrl, api, models) to pass Zod strict validation.
 	models, _ := internalConfig["models"].(map[string]interface{})
 	if models == nil {
 		models = make(map[string]interface{})
@@ -357,18 +356,9 @@ func syncConfigToOpenClaw() {
 	if modProviders == nil {
 		modProviders = make(map[string]interface{})
 	}
-	minimaxEntry := map[string]interface{}{
-		"baseUrl": "https://api.minimaxi.com/anthropic",
-		"api":     "anthropic-messages",
-		"models": []interface{}{
-			map[string]interface{}{"id": "MiniMax-M2.7", "name": "MiniMax M2.7"},
-			map[string]interface{}{"id": "MiniMax-M2.7-highspeed", "name": "MiniMax M2.7 Highspeed"},
-			map[string]interface{}{"id": "MiniMax-M2.5", "name": "MiniMax M2.5"},
-			map[string]interface{}{"id": "MiniMax-M2.5-highspeed", "name": "MiniMax M2.5 Highspeed"},
-		},
-	}
-	// Include apiKey in models.providers so gateway config hot-reload picks it up
-	// (auth-profiles.json may not be re-read after gateway startup)
+
+	minimaxEntry := loadMinimaxEntry()
+	// Include apiKey so gateway config hot-reload picks it up
 	if minimax, ok := ourConfig["minimax"].(map[string]interface{}); ok {
 		if apiKey, ok := minimax["apiKey"].(string); ok && apiKey != "" {
 			minimaxEntry["apiKey"] = apiKey
@@ -393,7 +383,8 @@ func syncConfigToOpenClaw() {
 }
 
 // setProviderEnvVars sets API keys as env vars so OpenClaw's agent auth
-// can find them via the env var fallback chain (verified from source).
+// can find them via the env var fallback chain.
+// Reads provider→envVar mappings from shared-config.json (single source of truth).
 func setProviderEnvVars() {
 	configPath := filepath.Join(baseDir, "data", ".openclaw", "openclaw.json")
 	data, err := os.ReadFile(configPath)
@@ -405,23 +396,67 @@ func setProviderEnvVars() {
 		return
 	}
 
-	// Mapping verified from OpenClaw source: extensions/*/openclaw.plugin.json
-	envVarMap := map[string]string{
-		"minimax":   "MINIMAX_API_KEY",
-		"deepseek":  "DEEPSEEK_API_KEY",
-		"openai":    "OPENAI_API_KEY",
-		"anthropic": "ANTHROPIC_API_KEY",
-		"moonshot":  "MOONSHOT_API_KEY",
-		"kimi":      "MOONSHOT_API_KEY",
-	}
-
-	for provider, envVar := range envVarMap {
-		if providerCfg, ok := config[provider].(map[string]interface{}); ok {
+	providers := loadSharedProviders()
+	for _, p := range providers {
+		if p.EnvVar == "" {
+			continue
+		}
+		if providerCfg, ok := config[p.ID].(map[string]interface{}); ok {
 			if apiKey, ok := providerCfg["apiKey"].(string); ok && apiKey != "" {
-				os.Setenv(envVar, apiKey)
+				os.Setenv(p.EnvVar, apiKey)
 			}
 		}
 	}
+}
+
+// loadMinimaxEntry builds the minimax models.providers entry from shared-config.json.
+func loadMinimaxEntry() map[string]interface{} {
+	cfgPath := filepath.Join(baseDir, "system", "shared-config.json")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		logMsg("无法读取 shared-config.json (minimax): " + err.Error())
+		return map[string]interface{}{
+			"baseUrl": "https://api.minimaxi.com/anthropic",
+			"api":     "anthropic-messages",
+			"models":  []interface{}{},
+		}
+	}
+	var sc struct {
+		Minimax map[string]interface{} `json:"minimax"`
+	}
+	if err := json.Unmarshal(data, &sc); err != nil || sc.Minimax == nil {
+		return map[string]interface{}{
+			"baseUrl": "https://api.minimaxi.com/anthropic",
+			"api":     "anthropic-messages",
+			"models":  []interface{}{},
+		}
+	}
+	return sc.Minimax
+}
+
+// loadSharedProviders reads the provider list from system/shared-config.json.
+// Falls back to an empty list on error (setProviderEnvVars / writeAuthProfiles become no-ops).
+func loadSharedProviders() []struct {
+	ID     string `json:"id"`
+	EnvVar string `json:"envVar"`
+} {
+	cfgPath := filepath.Join(baseDir, "system", "shared-config.json")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		logMsg("无法读取 shared-config.json: " + err.Error())
+		return nil
+	}
+	var sc struct {
+		Providers []struct {
+			ID     string `json:"id"`
+			EnvVar string `json:"envVar"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal(data, &sc); err != nil {
+		logMsg("无法解析 shared-config.json: " + err.Error())
+		return nil
+	}
+	return sc.Providers
 }
 
 // writeAuthProfiles creates auth-profiles.json for the agent auth store.
@@ -438,13 +473,12 @@ func writeAuthProfiles() {
 	}
 
 	profiles := make(map[string]interface{})
-	knownProviders := []string{"minimax", "deepseek", "kimi", "moonshot", "qwen", "anthropic", "openai", "glm", "zhipu"}
-	for _, provider := range knownProviders {
-		if providerCfg, ok := config[provider].(map[string]interface{}); ok {
+	for _, p := range loadSharedProviders() {
+		if providerCfg, ok := config[p.ID].(map[string]interface{}); ok {
 			if apiKey, ok := providerCfg["apiKey"].(string); ok && apiKey != "" {
-				profiles[provider+":default"] = map[string]interface{}{
+				profiles[p.ID+":default"] = map[string]interface{}{
 					"type":     "api_key",
-					"provider": provider,
+					"provider": p.ID,
 					"key":      apiKey,
 				}
 			}
