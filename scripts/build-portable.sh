@@ -54,20 +54,19 @@ fi
 log "Step 5: Packaging..."
 mkdir -p "$RELEASE_DIR"
 
-FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.tar.gz"
-UPDATE_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-update.tar.gz"
+FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.zip"
+UPDATE_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-update.zip"
 
 log "Creating full package..."
-tar -czf "$FULL_PACKAGE" \
-    -C "$PROJECT_ROOT" \
-    --exclude='portable/data/.openclaw/credentials' \
-    --exclude='portable/data/memory/*.md' \
-    --exclude='portable/data/backups/*' \
-    portable/
+cd "$PROJECT_ROOT"
+zip -r "$FULL_PACKAGE" portable/ \
+    -x 'portable/data/.openclaw/credentials*' \
+    -x 'portable/data/memory/*.md' \
+    -x 'portable/data/backups/*'
 
 log "Creating update package (app/ only)..."
-tar -czf "$UPDATE_PACKAGE" \
-    -C "$PORTABLE_DIR" \
+cd "$PORTABLE_DIR"
+zip -r "$UPDATE_PACKAGE" \
     app/ui/ \
     app/core/ \
     system/ \

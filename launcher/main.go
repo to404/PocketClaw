@@ -345,8 +345,7 @@ func syncConfigToOpenClaw() {
 		}
 	}
 
-	// Override MiniMax base URL to China endpoint (api.minimaxi.com).
-	// Config loaded from system/shared-config.json (single source of truth).
+	// Sync ALL provider configs from shared-config.json (single source of truth).
 	// Must include ALL required fields (baseUrl, api, models) to pass Zod strict validation.
 	models, _ := internalConfig["models"].(map[string]interface{})
 	if models == nil {
@@ -357,14 +356,28 @@ func syncConfigToOpenClaw() {
 		modProviders = make(map[string]interface{})
 	}
 
-	minimaxEntry := loadMinimaxEntry()
-	// Include apiKey so gateway config hot-reload picks it up
-	if minimax, ok := ourConfig["minimax"].(map[string]interface{}); ok {
-		if apiKey, ok := minimax["apiKey"].(string); ok && apiKey != "" {
-			minimaxEntry["apiKey"] = apiKey
+	providerEntries := loadProviderEntries()
+	for providerKey, entry := range providerEntries {
+		// Resolve API key: UI stores keys under "kimi"/"glm" but OpenClaw uses "moonshot"/"zhipu"
+		configKey := providerKey
+		if providerKey == "moonshot" {
+			configKey = "kimi"
+		} else if providerKey == "zhipu" {
+			configKey = "glm"
 		}
+		if providerCfg, ok := ourConfig[configKey].(map[string]interface{}); ok {
+			if apiKey, ok := providerCfg["apiKey"].(string); ok && apiKey != "" {
+				entry["apiKey"] = apiKey
+			}
+		}
+		// Also check if the key is stored under the OpenClaw provider name directly
+		if providerCfg, ok := ourConfig[providerKey].(map[string]interface{}); ok {
+			if apiKey, ok := providerCfg["apiKey"].(string); ok && apiKey != "" {
+				entry["apiKey"] = apiKey
+			}
+		}
+		modProviders[providerKey] = entry
 	}
-	modProviders["minimax"] = minimaxEntry
 	models["providers"] = modProviders
 	internalConfig["models"] = models
 
@@ -409,29 +422,37 @@ func setProviderEnvVars() {
 	}
 }
 
-// loadMinimaxEntry builds the minimax models.providers entry from shared-config.json.
-func loadMinimaxEntry() map[string]interface{} {
+// loadProviderEntries loads all provider configs (baseUrl, api, models) from shared-config.json.
+// Returns a map of providerKey → config entry for all providers that have baseUrl defined.
+func loadProviderEntries() map[string]map[string]interface{} {
 	cfgPath := filepath.Join(baseDir, "system", "shared-config.json")
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {
-		logMsg("无法读取 shared-config.json (minimax): " + err.Error())
-		return map[string]interface{}{
-			"baseUrl": "https://api.minimaxi.com/anthropic",
-			"api":     "anthropic-messages",
-			"models":  []interface{}{},
+		logMsg("无法读取 shared-config.json: " + err.Error())
+		return nil
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		logMsg("无法解析 shared-config.json: " + err.Error())
+		return nil
+	}
+	result := make(map[string]map[string]interface{})
+	for key, val := range raw {
+		if key == "providers" {
+			continue
 		}
-	}
-	var sc struct {
-		Minimax map[string]interface{} `json:"minimax"`
-	}
-	if err := json.Unmarshal(data, &sc); err != nil || sc.Minimax == nil {
-		return map[string]interface{}{
-			"baseUrl": "https://api.minimaxi.com/anthropic",
-			"api":     "anthropic-messages",
-			"models":  []interface{}{},
+		entry, ok := val.(map[string]interface{})
+		if !ok || entry["baseUrl"] == nil {
+			continue
 		}
+		// Deep-copy the entry so mutations (apiKey injection) don't affect the parsed data
+		copied := make(map[string]interface{})
+		for k, v := range entry {
+			copied[k] = v
+		}
+		result[key] = copied
 	}
-	return sc.Minimax
+	return result
 }
 
 // loadSharedProviders reads the provider list from system/shared-config.json.
@@ -472,13 +493,27 @@ func writeAuthProfiles() {
 		return
 	}
 
+	// Map UI provider IDs to OpenClaw provider names.
+	// OpenClaw resolves auth by matching provider against model string prefix
+	// (e.g. "moonshot/kimi-k2.5" → provider "moonshot").
+	openclawProvider := map[string]string{"kimi": "moonshot", "glm": "zhipu"}
+
 	profiles := make(map[string]interface{})
 	for _, p := range loadSharedProviders() {
 		if providerCfg, ok := config[p.ID].(map[string]interface{}); ok {
 			if apiKey, ok := providerCfg["apiKey"].(string); ok && apiKey != "" {
-				profiles[p.ID+":default"] = map[string]interface{}{
+				provider := p.ID
+				if mapped, ok := openclawProvider[p.ID]; ok {
+					provider = mapped
+				}
+				profileKey := provider + ":default"
+				// Don't overwrite if already set by a higher-priority entry
+				if profiles[profileKey] != nil {
+					continue
+				}
+				profiles[profileKey] = map[string]interface{}{
 					"type":     "api_key",
-					"provider": p.ID,
+					"provider": provider,
 					"key":      apiKey,
 				}
 			}

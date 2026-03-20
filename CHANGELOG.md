@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.29] - 2026-03-20
+
+### Fixed
+
+- **Simple mode chat regression (P0)**: Removed `ownRunIds` cross-client sync mechanism that was fundamentally broken — `idempotencyKey` (client UUID) ≠ `runId` (server UUID), so every AI response was misidentified as "cross-client" and triggered a `chat.history` reload that wiped in-progress assistant bubbles. Root cause of "AI 未返回内容" since v1.1.27
+- **Launcher auth-profiles provider mismatch**: `writeAuthProfiles()` now maps kimi→moonshot and glm→zhipu (matching server.js), so OpenClaw resolves auth correctly for all providers at startup
+- **Launcher only synced MiniMax config**: `syncConfigToOpenClaw()` now loads ALL provider configs (deepseek, moonshot, qwen, zhipu) from shared-config.json — previously only MiniMax had baseUrl/api/models in OpenClaw's internal config
+- **WebSocket hardcoded to gateway port**: UI now connects via the server.js WS proxy (`ws://localhost:3210/ws`) instead of directly to `ws://localhost:18789/` — works regardless of port configuration
+
+### Changed
+
+- **Build format**: `build-portable.sh` now produces `.zip` instead of `.tar.gz` for better cross-platform compatibility (Windows users can extract natively)
+
 ## [1.1.28] - 2026-03-20
 
 ### Changed

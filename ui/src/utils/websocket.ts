@@ -12,7 +12,9 @@ export interface WebSocketMessage {
 
 import { signChallenge } from "./deviceIdentity";
 
-const GATEWAY_WS_URL = "ws://localhost:18789/";
+// Use the UI server's WS proxy instead of connecting directly to the gateway.
+// This avoids hardcoding the gateway port and works regardless of host/port config.
+const GATEWAY_WS_URL = `ws://${location.host}/ws`;
 
 export class GatewayWebSocket {
   private ws: WebSocket | null = null;

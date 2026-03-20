@@ -31,10 +31,6 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function uuid(): string {
-  return crypto.randomUUID();
-}
-
 /** Strip OpenClaw envelope metadata prefixes from session titles / previews.
  *  OpenClaw wraps user messages with "Sender (untrusted metadata): ..." in transcripts,
  *  and deriveSessionTitle reads the first user message — which includes the envelope. */
@@ -69,10 +65,8 @@ export function useGateway(): UseGatewayReturn {
   const [currentSessionKey, setCurrentSessionKey] = useState(mainSessionKey);
   const [sessionList, setSessionList] = useState<SessionListItem[]>([]);
 
-  // runId → local message ID (tracks all active AI streams, own + from other clients)
+  // runId → local message ID (tracks all active AI streams)
   const runIdToMsgId = useRef<Map<string, string>>(new Map());
-  // Track runIds WE initiated (our idempotencyKeys) to detect cross-client messages
-  const ownRunIds = useRef<Set<string>>(new Set());
   const sessionKeyRef = useRef(mainSessionKey);
   const sendRpcRef = useRef(sendRpc);
   const sendTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -168,14 +162,6 @@ export function useGateway(): UseGatewayReturn {
             if (sendTimeoutRef.current) {
               clearTimeout(sendTimeoutRef.current);
               sendTimeoutRef.current = null;
-            }
-            // Cross-client sync: if this run is from another client, reload
-            // chat.history to get the user message that triggered it
-            if (!ownRunIds.current.has(runId)) {
-              sendRpcRef.current("chat.history", {
-                sessionKey: sessionKeyRef.current,
-                limit: 200,
-              });
             }
             const newId = makeId();
             runIdToMsgId.current.set(runId, newId);
@@ -384,13 +370,10 @@ export function useGateway(): UseGatewayReturn {
       }
     }, 60000);
     // Assistant bubble is created when first delta event arrives (gateway-driven)
-    const key = uuid();
-    ownRunIds.current.add(key);
     sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
       message: content.trim(),
       deliver: false,
-      idempotencyKey: key,
     });
   }, []);
 
@@ -423,13 +406,10 @@ export function useGateway(): UseGatewayReturn {
         setPending(false);
       }
     }, 60000);
-    const key = uuid();
-    ownRunIds.current.add(key);
     sendRpcRef.current("chat.send", {
       sessionKey: sessionKeyRef.current,
       message: lastUserMsg,
       deliver: false,
-      idempotencyKey: key,
     });
   }, [messages, pending]);
 
@@ -437,7 +417,6 @@ export function useGateway(): UseGatewayReturn {
     setMessages([]);
     setPending(false);
     runIdToMsgId.current.clear();
-    ownRunIds.current.clear();
     sendRpcRef.current("sessions.reset", {
       key: sessionKeyRef.current,
       reason: "new",
@@ -450,7 +429,6 @@ export function useGateway(): UseGatewayReturn {
     setMessages([]);
     setPending(false);
     runIdToMsgId.current.clear();
-    ownRunIds.current.clear();
   }, []);
 
   const createSession = useCallback((label?: string) => {
