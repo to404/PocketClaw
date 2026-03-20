@@ -105,7 +105,23 @@ export class GatewayWebSocket {
   private async sendConnectFrame(nonce: string): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    const { deviceId, publicKey, signature, signedAt } = await signChallenge(nonce);
+    // Fallback dummy values — used if Ed25519 signing fails for any reason.
+    // gateway.auth.mode = "none" + dangerouslyDisableDeviceAuth = true means
+    // the gateway never verifies the device signature for local deployments.
+    let deviceId = "pocketclaw-local";
+    let publicKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    let signature = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+    let signedAt = Date.now();
+
+    try {
+      const identity = await signChallenge(nonce);
+      deviceId = identity.deviceId;
+      publicKey = identity.publicKey;
+      signature = identity.signature;
+      signedAt = identity.signedAt;
+    } catch {
+      // sign failed — proceed with dummy keys, gateway won't verify them
+    }
 
     const frame = {
       type: "req",

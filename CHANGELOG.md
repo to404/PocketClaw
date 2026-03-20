@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.22] - 2026-03-20
+
+### Fixed
+
+- **Simple mode chat broken**: `sendConnectFrame` was `async` with errors swallowed by `void` — if `signChallenge` threw (crypto.subtle unavailable, Ed25519 not supported, etc.), the connect frame was never sent, handshake never completed, and all messages silently timed out. Added try/catch with fallback to dummy device fields so the connect frame is always sent.
+
 ## [1.1.21] - 2026-03-20
 
 ### Security
