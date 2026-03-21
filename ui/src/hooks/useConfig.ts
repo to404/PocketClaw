@@ -83,16 +83,12 @@ export function useConfig(): UseConfigReturn {
   );
 
   // Must have both model AND a real (non-masked) provider API key
-  const configKey = config?.agent?.model
-    ? getProviderConfigKey(config.agent.model)
-    : "";
+  const configKey = config?.agent?.model ? getProviderConfigKey(config.agent.model) : "";
   const providerCfg = configKey
     ? (config?.[configKey] as Record<string, unknown> | undefined)
     : undefined;
   const isConfigured = Boolean(
-    config?.agent?.model &&
-      providerCfg?.apiKey &&
-      !String(providerCfg.apiKey).startsWith("****"),
+    config?.agent?.model && providerCfg?.apiKey && !String(providerCfg.apiKey).startsWith("****"),
   );
 
   return { config, loading, error, updateConfig, setModel, reload, isConfigured };

@@ -84,8 +84,7 @@ export function Chat() {
     ? (config?.[currentConfigKey] as Record<string, unknown> | undefined)
     : undefined;
   const hasApiKey = Boolean(
-    currentProviderCfg?.apiKey &&
-      !String(currentProviderCfg.apiKey).startsWith("****"),
+    currentProviderCfg?.apiKey && !String(currentProviderCfg.apiKey).startsWith("****"),
   );
 
   const handleModelChange = async (model: string) => {
