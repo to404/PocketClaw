@@ -6,7 +6,197 @@ import { useGatewayConnection } from "../hooks/GatewayContext";
 import { useTheme } from "../hooks/useTheme";
 import { showToast } from "../components/Toast";
 import { getProviderConfigKey, MODEL_PROVIDERS } from "../utils/config";
-import type { ModelProvider } from "../types";
+import type { ModelProvider, OpenClawConfig } from "../types";
+
+/* ------------------------------------------------------------------ */
+/*  Channel card types & component                                    */
+/* ------------------------------------------------------------------ */
+
+interface ChannelFieldDef {
+  key: string;
+  label: string;
+  type: "text" | "password";
+}
+
+interface ChannelDef {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  fields: ChannelFieldDef[];
+  tutorialUrl?: string;
+  experimental?: boolean;
+  experimentalNote?: string;
+}
+
+const CHANNEL_DEFS: ChannelDef[] = [
+  {
+    id: "feishu",
+    name: "飞书",
+    icon: "\uD83D\uDC26",
+    description: "飞书机器人，支持 WebSocket（无需公网）",
+    fields: [
+      { key: "appId", label: "App ID", type: "text" },
+      { key: "appSecret", label: "App Secret", type: "password" },
+    ],
+    tutorialUrl: "https://open.feishu.cn",
+  },
+  {
+    id: "qqbot",
+    name: "QQ 机器人",
+    icon: "\uD83D\uDC27",
+    description: "QQ 官方机器人平台",
+    fields: [
+      { key: "appId", label: "App ID", type: "text" },
+      { key: "clientSecret", label: "Client Secret", type: "password" },
+    ],
+    tutorialUrl: "https://q.qq.com",
+  },
+  {
+    id: "wechat",
+    name: "微信",
+    icon: "\uD83D\uDCAC",
+    description: "微信聊天机器人",
+    fields: [],
+    experimental: true,
+    experimentalNote: "微信接入为实验性功能，使用第三方协议，可能存在风险",
+  },
+];
+
+interface ChannelCardProps {
+  channel: ChannelDef;
+  config: Record<string, unknown> | null;
+  onSave: (channelId: string, values: Record<string, string>) => void;
+  saving: boolean;
+}
+
+function ChannelCard({ channel, config, onSave, saving }: ChannelCardProps) {
+  const channelCfg = (config?.channels as Record<string, Record<string, unknown>> | undefined)?.[
+    channel.id
+  ];
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [visibility, setVisibility] = useState<Record<string, boolean>>({});
+
+  const isConfigured = (() => {
+    if (!channelCfg) return false;
+    if (channel.fields.length === 0) return Boolean(channelCfg.enabled);
+    return channel.fields.every((f) => Boolean(channelCfg[f.key]));
+  })();
+
+  const hasInput = (() => {
+    if (channel.fields.length === 0) return true;
+    return channel.fields.some((f) => Boolean(fieldValues[f.key]?.trim()));
+  })();
+
+  const handleSave = () => {
+    if (channel.fields.length === 0) {
+      onSave(channel.id, {});
+    } else {
+      const values: Record<string, string> = {};
+      for (const f of channel.fields) {
+        const v = fieldValues[f.key]?.trim();
+        if (v) values[f.key] = v;
+      }
+      onSave(channel.id, values);
+    }
+    setFieldValues({});
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+      {/* Header */}
+      <div className="mb-1 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{channel.icon}</span>
+          <h4 className="font-semibold text-gray-900 dark:text-gray-100">{channel.name}</h4>
+          {channel.experimental && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+              实验性功能
+            </span>
+          )}
+          {isConfigured ? (
+            <span className="text-lg text-green-500" title="已配置">
+              &#x2705;
+            </span>
+          ) : (
+            <span className="text-lg text-yellow-500" title="未配置">
+              &#x26A0;&#xFE0F;
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Description */}
+      <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">{channel.description}</p>
+
+      {/* Experimental notice */}
+      {channel.experimentalNote && (
+        <div className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          {channel.experimentalNote}
+        </div>
+      )}
+
+      {/* Field inputs */}
+      {channel.fields.map((field) => {
+        const isVisible = visibility[field.key] ?? false;
+        return (
+          <div key={field.key} className="mb-2">
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              {field.label}
+            </label>
+            <div className="relative">
+              <input
+                type={field.type === "password" && !isVisible ? "password" : "text"}
+                value={fieldValues[field.key] ?? ""}
+                onChange={(e) =>
+                  setFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                }
+                placeholder={
+                  channelCfg?.[field.key] ? "已配置，重新输入以更新" : `请输入 ${field.label}`
+                }
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-16 font-mono text-sm transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {field.type === "password" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibility((prev) => ({ ...prev, [field.key]: !isVisible }))
+                  }
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-600 dark:hover:text-gray-200"
+                >
+                  {isVisible ? "隐藏" : "显示"}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Footer: Save + tutorial link */}
+      <div className="mt-3 flex items-center justify-between">
+        <button
+          onClick={handleSave}
+          disabled={(!hasInput && channel.fields.length > 0) || saving}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
+        >
+          {saving ? "..." : channel.fields.length === 0 ? "启用" : "保存"}
+        </button>
+        {channel.tutorialUrl && (
+          <a
+            href={channel.tutorialUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            查看教程 &rarr;
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Per-provider card state                                           */
@@ -304,6 +494,29 @@ export function Settings() {
     [config, updateConfig],
   );
 
+  /* ---- Channel handlers ---- */
+  const [channelSaving, setChannelSaving] = useState(false);
+
+  const handleChannelSave = useCallback(
+    async (channelId: string, values: Record<string, string>) => {
+      setChannelSaving(true);
+      try {
+        const channelData: Record<string, unknown> = { enabled: true, ...values };
+        await updateConfig({
+          channels: { [channelId]: channelData },
+        } as Partial<OpenClawConfig>);
+        sendRpc("secrets.reload", {});
+        const def = CHANNEL_DEFS.find((c) => c.id === channelId);
+        showToast(`${def?.name ?? channelId} 已保存`, "success");
+      } catch {
+        showToast("保存失败", "error");
+      } finally {
+        setChannelSaving(false);
+      }
+    },
+    [updateConfig, sendRpc],
+  );
+
   /* ---- Render ---- */
 
   if (loading) {
@@ -403,22 +616,23 @@ export function Settings() {
             </div>
           </div>
 
-          {/* ---- Chat platform card ---- */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">聊天平台</h3>
-            <p className="text-sm text-gray-500">
-              连接 QQ、飞书、微信等聊天平台，请使用
-              <a
-                href="http://localhost:18789"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-1 text-indigo-600 hover:underline"
-              >
-                高级模式
-              </a>
-              进行配置
-            </p>
-          </div>
+          {/* ---- Chat platform channel cards ---- */}
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">
+              聊天平台
+            </h2>
+            <div className="space-y-4">
+              {CHANNEL_DEFS.map((ch) => (
+                <ChannelCard
+                  key={ch.id}
+                  channel={ch}
+                  config={config as Record<string, unknown> | null}
+                  onSave={(channelId, values) => void handleChannelSave(channelId, values)}
+                  saving={channelSaving}
+                />
+              ))}
+            </div>
+          </section>
 
           {/* ---- Update checker ---- */}
           <UpdateChecker />
