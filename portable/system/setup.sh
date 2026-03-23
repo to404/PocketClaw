@@ -7,7 +7,7 @@ RUNTIME_DIR="$BASE_DIR/app/runtime"
 CORE_DIR="$BASE_DIR/app/core"
 
 NODE_VERSION="22.22.1"
-OPENCLAW_VERSION="2026.3.13"
+OPENCLAW_VERSION="2026.3.22"
 # Chinese mirror (faster in mainland China), fall back to official
 NODE_MIRROR_URL="https://npmmirror.com/mirrors/node/v${NODE_VERSION}"
 NODE_OFFICIAL_URL="https://nodejs.org/dist/v${NODE_VERSION}"

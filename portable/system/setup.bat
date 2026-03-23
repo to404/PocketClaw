@@ -7,7 +7,7 @@ set "BASE_DIR=%SCRIPT_DIR%..\"
 set "RUNTIME_DIR=%BASE_DIR%app\runtime"
 set "CORE_DIR=%BASE_DIR%app\core"
 set "NODE_VERSION=22.22.1"
-set "OPENCLAW_VERSION=2026.3.13"
+set "OPENCLAW_VERSION=2026.3.22"
 set "NODE_SHA256=877cb93829e14fffbbc7903e7d8037336c9a79f3ea43c5d0b8c2379b79da56de"
 
 echo [PocketClaw Setup] === PocketClaw Setup ===
