@@ -120,9 +120,19 @@ export function Chat() {
         <>
           {/* Chat header */}
           <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-800">
-            <p className={`text-xs ${connected ? "text-emerald-600" : "text-red-500"}`}>
-              {connected ? "已连接" : connectionError || "连接中..."}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className={`text-xs ${connected ? "text-emerald-600" : "text-red-500"}`}>
+                {connected ? "已连接" : connectionError || "连接中..."}
+              </p>
+              {!connected && connectionError && (
+                <button
+                  onClick={() => window.location.reload()}
+                  className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-200"
+                >
+                  刷新重试
+                </button>
+              )}
+            </div>
             <button
               onClick={clearMessages}
               className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"

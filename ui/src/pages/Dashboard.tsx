@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { StatusCard } from "../components/StatusCard";
 import { useConfig } from "../hooks/useConfig";
 import { useGateway } from "../hooks/useGateway";
+import { getProviderConfigKey } from "../utils/config";
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -17,8 +18,10 @@ export function Dashboard() {
   }, [loading, isConfigured, navigate]);
 
   const modelName = config?.agent?.model?.split("/").pop() ?? "未配置";
-  const providerId = config?.agent?.model?.split("/")[0] ?? "";
-  const providerConfig = config?.[providerId] as Record<string, unknown> | undefined;
+  const configKey = getProviderConfigKey(config?.agent?.model ?? "");
+  const providerConfig = configKey
+    ? (config?.[configKey] as Record<string, unknown> | undefined)
+    : undefined;
   const hasApiKey = Boolean(providerConfig?.apiKey);
 
   const gatewayLabel = connected ? "已连接" : connectionError || "连接中...";

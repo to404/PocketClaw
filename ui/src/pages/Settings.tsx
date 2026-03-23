@@ -61,7 +61,7 @@ export function Settings() {
       <div className="mx-auto max-w-lg">
         <div className="mb-6 flex items-center gap-3">
           <Link
-            to="/dashboard"
+            to="/"
             className="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

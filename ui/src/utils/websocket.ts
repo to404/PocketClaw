@@ -22,7 +22,7 @@ export class GatewayWebSocket {
   private statusHandlers: Set<StatusHandler> = new Set();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = 20;
   private intentionallyClosed = false;
   private handshakeComplete = false;
 
