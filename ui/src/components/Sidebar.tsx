@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { Logo } from "./Logo";
 
 export interface SessionRow {
   key: string;
@@ -40,7 +41,7 @@ export function Sidebar({
         onClick={onToggle}
         className="flex h-screen w-10 flex-col items-center border-r border-gray-200 bg-white pt-3 dark:border-gray-700 dark:bg-gray-800"
       >
-        <span className="text-lg">🦞</span>
+        <Logo size={20} />
         <span className="mt-2 text-xs text-gray-400">☰</span>
       </button>
     );
@@ -51,7 +52,7 @@ export function Sidebar({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-xl">🦞</span>
+          <Logo size={24} />
           <div>
             <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">口袋龙虾</p>
             <p className="text-[10px] text-gray-400">简约模式</p>
