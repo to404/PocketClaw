@@ -177,6 +177,12 @@ function syncInternalConfig(config) {
     };
   }
 
+  // Pass through channels config (feishu, qqbot, wechat, etc.) to OpenClaw.
+  // OpenClaw's chokidar file watcher will hot-reload and start channel monitors.
+  if (config.channels && typeof config.channels === "object") {
+    internal.channels = config.channels;
+  }
+
   fs.mkdirSync(internalDir, { recursive: true, mode: 0o700 });
   fs.writeFileSync(
     internalPath,

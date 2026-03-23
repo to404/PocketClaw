@@ -405,6 +405,11 @@ func syncConfigToOpenClaw() {
 	models["providers"] = modProviders
 	internalConfig["models"] = models
 
+	// Pass through channels config (feishu, qqbot, wechat, etc.) to OpenClaw.
+	if channels, ok := ourConfig["channels"].(map[string]interface{}); ok {
+		internalConfig["channels"] = channels
+	}
+
 	// Write back
 	os.MkdirAll(internalDir, 0700)
 	outData, err := json.MarshalIndent(internalConfig, "", "  ")
