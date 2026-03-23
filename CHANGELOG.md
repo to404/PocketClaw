@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-03-24
+
+### Fixed
+
+- **P0 Gateway 崩溃**: v1.2.0 的频道配置透传在 OpenClaw 3.13 上触发插件未找到错误，导致 gateway 进入坏状态：简约模式无 AI 回复、高级模式（18789）报 control UI 认证错误。修复：不再将 `channels.*` 写入 OpenClaw 内部 config，同时 `delete internal.channels` 清除旧安装中已写入的脏数据
+
 ## [1.2.0] - 2026-03-23
 
 ### Added

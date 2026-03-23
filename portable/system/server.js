@@ -177,11 +177,12 @@ function syncInternalConfig(config) {
     };
   }
 
-  // Pass through channels config (feishu, qqbot, wechat, etc.) to OpenClaw.
-  // OpenClaw's chokidar file watcher will hot-reload and start channel monitors.
-  if (config.channels && typeof config.channels === "object") {
-    internal.channels = config.channels;
-  }
+  // Do NOT pass channels config to OpenClaw's internal config.
+  // OpenClaw 3.13 does not have channel plugins installed; writing channels here
+  // causes the gateway to enter a broken state on hot-reload (plugin-not-found error).
+  // Channels are stored in the user-facing config (openclaw.json) only.
+  // Remove any previously written channels key to clean up old installs.
+  delete internal.channels;
 
   fs.mkdirSync(internalDir, { recursive: true, mode: 0o700 });
   fs.writeFileSync(

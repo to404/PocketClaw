@@ -405,10 +405,11 @@ func syncConfigToOpenClaw() {
 	models["providers"] = modProviders
 	internalConfig["models"] = models
 
-	// Pass through channels config (feishu, qqbot, wechat, etc.) to OpenClaw.
-	if channels, ok := ourConfig["channels"].(map[string]interface{}); ok {
-		internalConfig["channels"] = channels
-	}
+	// Do NOT pass channels config to OpenClaw's internal config.
+	// OpenClaw 3.13 does not have channel plugins installed; writing channels here
+	// causes the gateway to enter a broken state on hot-reload (plugin-not-found error).
+	// Remove any previously written channels key to clean up old installs.
+	delete(internalConfig, "channels")
 
 	// Write back
 	os.MkdirAll(internalDir, 0700)
