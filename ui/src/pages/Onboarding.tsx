@@ -222,6 +222,9 @@ export function Onboarding() {
                   placeholder="App Secret"
                   value={channels.feishu?.appSecret ?? ""}
                   onChange={(e) => toggleChannel("feishu", "appSecret", e.target.value)}
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
                   className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
                 />
               </ChannelCard>
@@ -245,6 +248,9 @@ export function Onboarding() {
                   placeholder="Client Secret"
                   value={channels.qq?.clientSecret ?? ""}
                   onChange={(e) => toggleChannel("qq", "clientSecret", e.target.value)}
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
                   className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
                 />
               </ChannelCard>

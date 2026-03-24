@@ -17,7 +17,9 @@ export function ApiKeyInput({ value, onChange, placeholder }: ApiKeyInputProps) 
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? "sk-xxxxxxxxxxxxxxxx"}
         className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 pr-20 font-mono text-sm transition-colors focus:border-indigo-500 focus:outline-none"
-        autoComplete="off"
+        autoComplete="new-password"
+        data-1p-ignore
+        data-lpignore="true"
         spellCheck={false}
       />
       <button

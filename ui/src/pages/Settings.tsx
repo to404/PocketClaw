@@ -155,7 +155,9 @@ function ChannelCard({ channel, config, onSave, saving }: ChannelCardProps) {
                   channelCfg?.[field.key] ? "已配置，重新输入以更新" : `请输入 ${field.label}`
                 }
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-16 font-mono text-sm transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                autoComplete="off"
+                autoComplete="new-password"
+                data-1p-ignore
+                data-lpignore="true"
                 spellCheck={false}
               />
               {field.type === "password" && (
@@ -337,7 +339,9 @@ function ProviderCard({
             onChange={(e) => onApiKeyChange(e.target.value)}
             placeholder={hasSavedKey ? "已配置，重新输入以更新" : "sk-xxxxxxxxxxxxxxxx"}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-16 font-mono text-sm transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            autoComplete="off"
+            autoComplete="new-password"
+            data-1p-ignore
+            data-lpignore="true"
             spellCheck={false}
           />
           <button
