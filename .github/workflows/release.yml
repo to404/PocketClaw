@@ -116,6 +116,17 @@ jobs:
             ls dist/ 2>/dev/null || echo "         dist/ directory does not exist"
           fi
 
+      - name: Install channel plugins
+        run: |
+          cd portable/app/core
+          npm install @openclaw/feishu@latest @tencent-connect/openclaw-qqbot@latest 2>&1 || \
+          npm install @larksuite/openclaw-lark@latest @tencent-connect/openclaw-qqbot@latest 2>&1 || \
+          echo "WARN: Channel plugin installation failed — channels will not be available"
+          echo "Installed channel plugins:"
+          ls node_modules/@openclaw/ 2>/dev/null || true
+          ls node_modules/@larksuite/ 2>/dev/null || true
+          ls node_modules/@tencent-connect/ 2>/dev/null || true
+
       - name: Pre-install ClawHub skills
         run: |
           export OPENCLAW_HOME="portable/data/.openclaw"
@@ -250,6 +261,18 @@ jobs:
             echo "         Port 18789 will show 'assets not found'. This is non-fatal."
             ls dist/ 2>/dev/null || echo "         dist/ directory does not exist"
           fi
+
+      - name: Install channel plugins
+        shell: bash
+        run: |
+          cd portable/app/core
+          npm install @openclaw/feishu@latest @tencent-connect/openclaw-qqbot@latest 2>&1 || \
+          npm install @larksuite/openclaw-lark@latest @tencent-connect/openclaw-qqbot@latest 2>&1 || \
+          echo "WARN: Channel plugin installation failed — channels will not be available"
+          echo "Installed channel plugins:"
+          ls node_modules/@openclaw/ 2>/dev/null || true
+          ls node_modules/@larksuite/ 2>/dev/null || true
+          ls node_modules/@tencent-connect/ 2>/dev/null || true
 
       - name: Pre-install ClawHub skills
         shell: bash

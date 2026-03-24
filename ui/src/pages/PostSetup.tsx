@@ -127,6 +127,10 @@ export function PostSetup() {
             </svg>
           </Link>
 
+          <p className="text-center text-xs text-gray-400">
+            随时可以回到此页面修改 API Key 或频道配置
+          </p>
+
           <Link
             to="/onboarding"
             className="block text-center text-sm text-gray-500 hover:text-indigo-600"

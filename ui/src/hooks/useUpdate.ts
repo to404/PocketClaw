@@ -104,6 +104,7 @@ export function useUpdate(): UseUpdateReturn {
       const { version: current } = await getVersion();
 
       let latest: string | undefined;
+      let fetchError: string | null = null;
       try {
         const res = await fetch(GITHUB_API, {
           headers: { Accept: "application/vnd.github.v3+json" },
@@ -111,9 +112,13 @@ export function useUpdate(): UseUpdateReturn {
         if (res.ok) {
           const data = (await res.json()) as { tag_name: string };
           latest = data.tag_name.replace(/^v/, "");
+        } else if (res.status === 403) {
+          fetchError = "GitHub API 请求频率超限，请稍后再试";
+        } else {
+          fetchError = `无法获取最新版本 (HTTP ${String(res.status)})`;
         }
       } catch {
-        // offline or rate-limited, just show current version
+        fetchError = "无法连接 GitHub，请检查网络";
       }
 
       setVersionInfo({
@@ -121,6 +126,10 @@ export function useUpdate(): UseUpdateReturn {
         latest,
         updateAvailable: latest ? compareSemver(latest, current) > 0 : false,
       });
+
+      if (!latest && fetchError) {
+        setError(fetchError);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Version check failed");
     } finally {

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.6] - 2026-03-25
+
+### Fixed
+
+- **检查更新永远显示最新版本**: GitHub API 请求失败时 `latest` 为 undefined 导致 `updateAvailable` 始终为 false。现在正确显示错误原因（网络/频率限制）而不是"已是最新版本"
+- **频道配置不生效**: 恢复 channels passthrough（条件性——仅当 @openclaw/feishu 或 @tencent-connect/openclaw-qqbot 插件已安装时才写入内部配置）
+- **CI 安装频道插件**: release workflow 在打包前安装飞书和 QQ Bot 插件，确保频道功能开箱即用
+
+### Changed
+
+- **UpdateChecker 优化**: 显示口袋龙虾版本标签，GitHub 获取失败时显示明确错误而非误导性"已是最新"
+- **PostSetup 提示**: 提醒用户可随时回 3210 修改 API Key 和频道配置
+
 ## [1.2.4] - 2026-03-24
 
 ### Fixed

@@ -405,11 +405,19 @@ func syncConfigToOpenClaw() {
 	models["providers"] = modProviders
 	internalConfig["models"] = models
 
-	// Do NOT pass channels config to OpenClaw's internal config.
-	// OpenClaw 3.13 does not have channel plugins installed; writing channels here
-	// causes the gateway to enter a broken state on hot-reload (plugin-not-found error).
-	// Remove any previously written channels key to clean up old installs.
-	delete(internalConfig, "channels")
+	// Pass channels config to OpenClaw ONLY if channel plugins are installed.
+	// CI installs @openclaw/feishu and @tencent-connect/openclaw-qqbot since v1.2.5.
+	pluginDir := filepath.Join(baseDir, "app", "core", "node_modules")
+	_, hasFeishu := os.Stat(filepath.Join(pluginDir, "@openclaw", "feishu"))
+	_, hasLark := os.Stat(filepath.Join(pluginDir, "@larksuite", "openclaw-lark"))
+	_, hasQQ := os.Stat(filepath.Join(pluginDir, "@tencent-connect", "openclaw-qqbot"))
+	if (hasFeishu == nil || hasLark == nil || hasQQ == nil) {
+		if channels, ok := ourConfig["channels"].(map[string]interface{}); ok {
+			internalConfig["channels"] = channels
+		}
+	} else {
+		delete(internalConfig, "channels")
+	}
 
 	// Write back
 	os.MkdirAll(internalDir, 0700)

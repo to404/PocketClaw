@@ -29,23 +29,31 @@ export function UpdateChecker() {
     updateStatus.status !== "error";
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 font-semibold text-gray-900">系统更新</h3>
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+      <h3 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">系统更新</h3>
 
       {checking && <p className="text-sm text-gray-500">正在检查更新...</p>}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-2 text-sm text-amber-600">{error}</p>}
 
       {versionInfo && !checking && (
         <div className="space-y-2">
-          <p className="text-sm text-gray-700">当前版本：v{versionInfo.current}</p>
-          {versionInfo.latest && (
-            <p className="text-sm text-gray-700">最新版本：v{versionInfo.latest}</p>
-          )}
-          {versionInfo.updateAvailable ? (
-            <p className="text-sm font-medium text-indigo-600">有新版本可用</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            口袋龙虾：v{versionInfo.current}
+          </p>
+          {versionInfo.latest ? (
+            <>
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                最新版本：v{versionInfo.latest}
+              </p>
+              {versionInfo.updateAvailable ? (
+                <p className="text-sm font-medium text-indigo-600">有新版本可用</p>
+              ) : (
+                <p className="text-sm text-emerald-600">已是最新版本</p>
+              )}
+            </>
           ) : (
-            <p className="text-sm text-emerald-600">已是最新版本</p>
+            !error && <p className="text-sm text-gray-400">未能获取最新版本信息</p>
           )}
         </div>
       )}
@@ -53,14 +61,14 @@ export function UpdateChecker() {
       {/* Progress display during update */}
       {(isInProgress || updateStatus.status === "complete" || updateStatus.status === "error") && (
         <div className="mt-3 space-y-2">
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
             {STATUS_LABELS[updateStatus.status]}
             {updateStatus.version && (
               <span className="ml-1 text-gray-500">(v{updateStatus.version})</span>
             )}
           </p>
           {isInProgress && (
-            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-600">
               <div
                 className="h-full rounded-full bg-indigo-500 transition-all duration-300"
                 style={{ width: `${updateStatus.progress}%` }}
@@ -82,7 +90,7 @@ export function UpdateChecker() {
         <button
           onClick={() => void checkForUpdates()}
           disabled={checking || isInProgress}
-          className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
+          className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
         >
           {checking ? "检查中..." : "检查更新"}
         </button>
@@ -102,7 +110,7 @@ export function UpdateChecker() {
       <div className="mt-3">
         <button
           onClick={() => setManualOpen(!manualOpen)}
-          className="text-sm text-gray-500 transition-colors hover:text-gray-700"
+          className="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:hover:text-gray-300"
         >
           {manualOpen ? "\u25BC" : "\u25B6"} 手动更新方法
         </button>

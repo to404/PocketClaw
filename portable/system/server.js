@@ -11,6 +11,7 @@ const SCRIPT_DIR = __dirname;
 const BASE_DIR = path.resolve(SCRIPT_DIR, "..");
 const UI_DIR = path.join(BASE_DIR, "app", "ui", "dist");
 const DATA_DIR = path.join(BASE_DIR, "data");
+const CORE_DIR = path.join(BASE_DIR, "app", "core");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -177,12 +178,18 @@ function syncInternalConfig(config) {
     };
   }
 
-  // Do NOT pass channels config to OpenClaw's internal config.
-  // OpenClaw 3.13 does not have channel plugins installed; writing channels here
-  // causes the gateway to enter a broken state on hot-reload (plugin-not-found error).
-  // Channels are stored in the user-facing config (openclaw.json) only.
-  // Remove any previously written channels key to clean up old installs.
-  delete internal.channels;
+  // Pass channels config to OpenClaw ONLY if channel plugins are installed.
+  // On OpenClaw 3.13 without plugins, this field causes a gateway crash.
+  // CI installs @openclaw/feishu and @tencent-connect/openclaw-qqbot since v1.2.5.
+  const pluginDir = path.join(CORE_DIR, "node_modules");
+  const hasFeishu = fs.existsSync(path.join(pluginDir, "@openclaw", "feishu")) ||
+                    fs.existsSync(path.join(pluginDir, "@larksuite", "openclaw-lark"));
+  const hasQQ = fs.existsSync(path.join(pluginDir, "@tencent-connect", "openclaw-qqbot"));
+  if ((hasFeishu || hasQQ) && config.channels && typeof config.channels === "object") {
+    internal.channels = config.channels;
+  } else {
+    delete internal.channels;
+  }
 
   fs.mkdirSync(internalDir, { recursive: true, mode: 0o700 });
   fs.writeFileSync(
