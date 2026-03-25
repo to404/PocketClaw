@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.8] - 2026-03-25
+
+### Fixed
+
+- **QQ 频道 key 错误 (P0)**: Onboarding 用 `channels.qq` 保存配置，但 OpenClaw 插件注册的 channel ID 是 `qqbot`。统一为 `channels.qqbot`
+- **引导第二步模型链接缺失**: Kimi/GLM/豆包/Gemini 因 model prefix 与 provider ID 不一致导致找不到 API Key 获取链接。改用 `getProviderConfigKey` 映射
+- **Onboarding 频道配置未正确保存**: 确保每个频道 entry 带 `enabled: true`
+
+### Added
+
+- **OpenClaw 内核一键更新**: 新增 `/api/openclaw-update` 端点 + UpdateChecker 中独立的"更新 OpenClaw 内核"按钮，执行 `npm install openclaw@latest`
+- **PocketClaw 和 OpenClaw 分别检查更新**: UpdateChecker 显示双版本并各自提供更新入口
+
 ## [1.2.7] - 2026-03-25
 
 ### Fixed

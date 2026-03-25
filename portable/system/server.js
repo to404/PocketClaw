@@ -485,6 +485,54 @@ function handleApiUpdateStatus(res) {
   jsonResponse(res, 200, updateState);
 }
 
+// ---------------------------------------------------------------------------
+// OpenClaw kernel update: /api/openclaw-update (POST)
+// ---------------------------------------------------------------------------
+
+async function startOpenclawUpdate() {
+  const { execSync } = require("child_process");
+  const coreDir = path.join(BASE_DIR, "app", "core");
+  const pkgPath = path.join(coreDir, "node_modules", "openclaw", "package.json");
+
+  let currentVer = "unknown";
+  try {
+    currentVer = JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version;
+  } catch { /* ok */ }
+
+  try {
+    execSync(`"${process.execPath}" "${path.dirname(process.execPath)}/../lib/node_modules/npm/bin/npm-cli.js" install openclaw@latest --prefix "${coreDir}"`, {
+      timeout: 120000,
+      cwd: coreDir,
+    });
+  } catch {
+    // Try simpler npm path
+    execSync(`npm install openclaw@latest --prefix "${coreDir}"`, {
+      timeout: 120000,
+      cwd: coreDir,
+    });
+  }
+
+  let newVer = "unknown";
+  try {
+    // Clear require cache to read fresh package.json
+    newVer = JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version;
+  } catch { /* ok */ }
+
+  return { previous: currentVer, current: newVer, updated: currentVer !== newVer };
+}
+
+function handleApiOpenclawUpdate(req, res) {
+  if (req.method !== "POST") {
+    res.writeHead(405, SECURITY_HEADERS);
+    res.end();
+    return;
+  }
+
+  startOpenclawUpdate()
+    .then((result) => jsonResponse(res, 200, result))
+    .catch((err) => jsonResponse(res, 500, { error: err.message || "OpenClaw 更新失败" }));
+}
+
 function handleApiHealth(res) {
   const gatewayUrl = `http://${GATEWAY_HOST}:${GATEWAY_PORT}/health`;
   const reqLib = require("http");
@@ -626,6 +674,8 @@ const server = http.createServer((req, res) => {
   if (pathname === "/api/update" && req.method === "POST")
     return handleApiUpdate(req, res);
   if (pathname === "/api/update/status") return handleApiUpdateStatus(res);
+  if (pathname === "/api/openclaw-update" && req.method === "POST")
+    return handleApiOpenclawUpdate(req, res);
 
   const filePath = path.join(UI_DIR, pathname === "/" ? "index.html" : pathname);
   if (serveStatic(res, filePath)) return;

@@ -17,10 +17,37 @@ export function UpdateChecker() {
   const { versionInfo, checking, error, checkForUpdates, triggerUpdate, updateStatus, updating } =
     useUpdate();
   const [manualOpen, setManualOpen] = useState(false);
+  const [ocUpdating, setOcUpdating] = useState(false);
+  const [ocResult, setOcResult] = useState<string | null>(null);
 
   useEffect(() => {
     void checkForUpdates();
   }, [checkForUpdates]);
+
+  const handleOpenclawUpdate = async () => {
+    setOcUpdating(true);
+    setOcResult(null);
+    try {
+      const res = await fetch("/api/openclaw-update", { method: "POST" });
+      const data = (await res.json()) as {
+        previous?: string;
+        current?: string;
+        updated?: boolean;
+        error?: string;
+      };
+      if (data.error) {
+        setOcResult(`更新失败: ${data.error}`);
+      } else if (data.updated) {
+        setOcResult(`已从 v${data.previous} 更新到 v${data.current}，请重启生效`);
+      } else {
+        setOcResult("已是最新版本");
+      }
+    } catch {
+      setOcResult("更新请求失败");
+    } finally {
+      setOcUpdating(false);
+    }
+  };
 
   const isInProgress =
     updating &&
@@ -110,6 +137,26 @@ export function UpdateChecker() {
           </button>
         )}
       </div>
+
+      {/* OpenClaw kernel update */}
+      {versionInfo && !checking && versionInfo.openclawVersion && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => void handleOpenclawUpdate()}
+            disabled={ocUpdating}
+            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+          >
+            {ocUpdating ? "更新中..." : "更新 OpenClaw 内核"}
+          </button>
+          {ocResult && (
+            <span
+              className={`text-sm ${ocResult.includes("失败") ? "text-red-600" : "text-emerald-600"}`}
+            >
+              {ocResult}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Manual update instructions */}
       <div className="mt-3">

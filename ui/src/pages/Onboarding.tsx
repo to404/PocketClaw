@@ -9,7 +9,7 @@ import { MODEL_PROVIDERS, getProviderConfigKey } from "../utils/config";
 
 interface ChannelConfig {
   feishu?: { enabled: boolean; appId: string; appSecret: string };
-  qq?: { enabled: boolean; appId: string; clientSecret: string };
+  qqbot?: { enabled: boolean; appId: string; clientSecret: string };
   wechat?: { enabled: boolean };
 }
 
@@ -105,7 +105,7 @@ export function Onboarding() {
   };
 
   const toggleChannel = (
-    channel: "feishu" | "qq" | "wechat",
+    channel: "feishu" | "qqbot" | "wechat",
     field: string,
     value: string | boolean,
   ) => {
@@ -162,8 +162,8 @@ export function Onboarding() {
               <ApiKeyInput value={apiKey} onChange={setApiKey} />
               {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
               {(() => {
-                const providerId = model.split("/")[0] ?? "";
-                const provider = MODEL_PROVIDERS.find((p) => p.id === providerId);
+                const configKey = getProviderConfigKey(model);
+                const provider = MODEL_PROVIDERS.find((p) => p.id === configKey);
                 const url = provider?.apiKeyUrl;
                 return url ? (
                   <a
@@ -241,21 +241,21 @@ export function Onboarding() {
               <ChannelCard
                 name="QQ"
                 icon={<QQIcon className="h-6 w-6 shrink-0 text-sky-500" />}
-                expanded={expandedChannel === "qq"}
-                onToggle={() => setExpandedChannel(expandedChannel === "qq" ? null : "qq")}
+                expanded={expandedChannel === "qqbot"}
+                onToggle={() => setExpandedChannel(expandedChannel === "qqbot" ? null : "qqbot")}
               >
                 <input
                   type="text"
                   placeholder="App ID"
-                  value={channels.qq?.appId ?? ""}
-                  onChange={(e) => toggleChannel("qq", "appId", e.target.value)}
+                  value={channels.qqbot?.appId ?? ""}
+                  onChange={(e) => toggleChannel("qqbot", "appId", e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
                 />
                 <input
                   type="password"
                   placeholder="Client Secret"
-                  value={channels.qq?.clientSecret ?? ""}
-                  onChange={(e) => toggleChannel("qq", "clientSecret", e.target.value)}
+                  value={channels.qqbot?.clientSecret ?? ""}
+                  onChange={(e) => toggleChannel("qqbot", "clientSecret", e.target.value)}
                   autoComplete="new-password"
                   data-1p-ignore
                   data-lpignore="true"
@@ -383,12 +383,12 @@ function ChannelCard({
 
 /** Helper to produce sensible defaults for new channel entries */
 function getChannelDefaults(
-  channel: "feishu" | "qq" | "wechat",
+  channel: "feishu" | "qqbot" | "wechat",
 ): NonNullable<ChannelConfig[typeof channel]> {
   switch (channel) {
     case "feishu":
       return { enabled: true, appId: "", appSecret: "" };
-    case "qq":
+    case "qqbot":
       return { enabled: true, appId: "", clientSecret: "" };
     case "wechat":
       return { enabled: false };
