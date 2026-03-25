@@ -492,51 +492,37 @@ function handleApiUpdateStatus(res) {
 }
 
 // ---------------------------------------------------------------------------
-// OpenClaw kernel update: /api/openclaw-update (POST)
+// OpenClaw kernel version check: /api/openclaw-check (GET)
+// Portable runtime has no npm — OpenClaw updates are delivered via PocketClaw
+// release packages. This endpoint only CHECKS for updates (no install).
 // ---------------------------------------------------------------------------
 
-async function startOpenclawUpdate() {
-  const { execSync } = require("child_process");
-  const coreDir = path.join(BASE_DIR, "app", "core");
-  const pkgPath = path.join(coreDir, "node_modules", "openclaw", "package.json");
-
-  let currentVer = "unknown";
+function handleApiOpenclawCheck(res) {
+  const pkgPath = path.join(BASE_DIR, "app", "core", "node_modules", "openclaw", "package.json");
+  let current = "unknown";
   try {
-    currentVer = JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version;
+    current = JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version;
   } catch { /* ok */ }
 
-  try {
-    execSync(`"${process.execPath}" "${path.dirname(process.execPath)}/../lib/node_modules/npm/bin/npm-cli.js" install openclaw@latest --prefix "${coreDir}"`, {
-      timeout: 120000,
-      cwd: coreDir,
+  // Check npm registry for latest version
+  const https = require("https");
+  const req = https.get("https://registry.npmjs.org/openclaw/latest", { timeout: 10000 }, (apiRes) => {
+    let body = "";
+    apiRes.on("data", (chunk) => { body += chunk; });
+    apiRes.on("end", () => {
+      try {
+        const data = JSON.parse(body);
+        const latest = data.version || "unknown";
+        jsonResponse(res, 200, { current, latest, updateAvailable: current !== latest && latest !== "unknown" });
+      } catch {
+        jsonResponse(res, 200, { current, latest: null, updateAvailable: false });
+      }
     });
-  } catch {
-    // Try simpler npm path
-    execSync(`npm install openclaw@latest --prefix "${coreDir}"`, {
-      timeout: 120000,
-      cwd: coreDir,
-    });
-  }
-
-  let newVer = "unknown";
-  try {
-    // Clear require cache to read fresh package.json
-    newVer = JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version;
-  } catch { /* ok */ }
-
-  return { previous: currentVer, current: newVer, updated: currentVer !== newVer };
-}
-
-function handleApiOpenclawUpdate(req, res) {
-  if (req.method !== "POST") {
-    res.writeHead(405, SECURITY_HEADERS);
-    res.end();
-    return;
-  }
-
-  startOpenclawUpdate()
-    .then((result) => jsonResponse(res, 200, result))
-    .catch((err) => jsonResponse(res, 500, { error: err.message || "OpenClaw 更新失败" }));
+  });
+  req.on("error", () => {
+    jsonResponse(res, 200, { current, latest: null, updateAvailable: false, error: "无法检查 OpenClaw 更新" });
+  });
+  req.on("timeout", () => { req.destroy(); });
 }
 
 function handleApiHealth(res) {
@@ -680,8 +666,7 @@ const server = http.createServer((req, res) => {
   if (pathname === "/api/update" && req.method === "POST")
     return handleApiUpdate(req, res);
   if (pathname === "/api/update/status") return handleApiUpdateStatus(res);
-  if (pathname === "/api/openclaw-update" && req.method === "POST")
-    return handleApiOpenclawUpdate(req, res);
+  if (pathname === "/api/openclaw-check") return handleApiOpenclawCheck(res);
 
   const filePath = path.join(UI_DIR, pathname === "/" ? "index.html" : pathname);
   if (serveStatic(res, filePath)) return;

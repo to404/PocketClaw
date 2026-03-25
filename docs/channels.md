@@ -53,7 +53,7 @@
 
 ### 第一步：注册 QQ 机器人
 
-1. 打开 [QQ 开放平台](https://q.qq.com/qqbot/openclaw)
+1. 打开 [QQ 开放平台](https://q.qq.com)
 2. 用手机 QQ 扫码登录
 3. 如需要，完成实名认证
 

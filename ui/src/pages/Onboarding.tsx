@@ -262,7 +262,7 @@ export function Onboarding() {
                   className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
                 />
                 <a
-                  href="https://q.qq.com/qqbot/openclaw"
+                  href="https://q.qq.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-2 inline-block text-xs text-indigo-600 hover:underline"

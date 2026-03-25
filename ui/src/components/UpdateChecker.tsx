@@ -13,39 +13,38 @@ const STATUS_LABELS: Record<UpdateStatus["status"], string> = {
   error: "更新失败",
 };
 
+interface OpenClawCheck {
+  current: string;
+  latest: string | null;
+  updateAvailable: boolean;
+  error?: string;
+}
+
 export function UpdateChecker() {
   const { versionInfo, checking, error, checkForUpdates, triggerUpdate, updateStatus, updating } =
     useUpdate();
   const [manualOpen, setManualOpen] = useState(false);
-  const [ocUpdating, setOcUpdating] = useState(false);
-  const [ocResult, setOcResult] = useState<string | null>(null);
+
+  // OpenClaw version check (separate from PocketClaw)
+  const [ocCheck, setOcCheck] = useState<OpenClawCheck | null>(null);
+  const [ocChecking, setOcChecking] = useState(false);
 
   useEffect(() => {
     void checkForUpdates();
+    void checkOpenClaw();
   }, [checkForUpdates]);
 
-  const handleOpenclawUpdate = async () => {
-    setOcUpdating(true);
-    setOcResult(null);
+  const checkOpenClaw = async () => {
+    setOcChecking(true);
     try {
-      const res = await fetch("/api/openclaw-update", { method: "POST" });
-      const data = (await res.json()) as {
-        previous?: string;
-        current?: string;
-        updated?: boolean;
-        error?: string;
-      };
-      if (data.error) {
-        setOcResult(`更新失败: ${data.error}`);
-      } else if (data.updated) {
-        setOcResult(`已从 v${data.previous} 更新到 v${data.current}，请重启生效`);
-      } else {
-        setOcResult("已是最新版本");
+      const res = await fetch("/api/openclaw-check");
+      if (res.ok) {
+        setOcCheck((await res.json()) as OpenClawCheck);
       }
     } catch {
-      setOcResult("更新请求失败");
+      // silent
     } finally {
-      setOcUpdating(false);
+      setOcChecking(false);
     }
   };
 
@@ -60,37 +59,53 @@ export function UpdateChecker() {
       <h3 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">系统更新</h3>
 
       {checking && <p className="text-sm text-gray-500">正在检查更新...</p>}
-
       {error && <p className="mb-2 text-sm text-amber-600">{error}</p>}
 
       {versionInfo && !checking && (
-        <div className="space-y-2">
-          <p className="text-sm text-gray-700 dark:text-gray-300">
-            口袋龙虾：v{versionInfo.current}
-          </p>
-          {versionInfo.openclawVersion && (
-            <p className="text-sm text-gray-700 dark:text-gray-300">
-              OpenClaw 内核：v{versionInfo.openclawVersion}
+        <div className="space-y-3">
+          {/* PocketClaw version */}
+          <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              口袋龙虾 v{versionInfo.current}
             </p>
-          )}
-          {versionInfo.latest ? (
-            <>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                最新版本：v{versionInfo.latest}
+            {versionInfo.latest && (
+              <p className="mt-1 text-xs text-gray-500">最新: v{versionInfo.latest}</p>
+            )}
+            {versionInfo.updateAvailable ? (
+              <p className="mt-1 text-xs font-medium text-indigo-600">有新版本可用</p>
+            ) : versionInfo.latest ? (
+              <p className="mt-1 text-xs text-emerald-600">已是最新</p>
+            ) : null}
+          </div>
+
+          {/* OpenClaw version */}
+          <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              OpenClaw 内核{" "}
+              {ocCheck
+                ? `v${ocCheck.current}`
+                : versionInfo.openclawVersion
+                  ? `v${versionInfo.openclawVersion}`
+                  : ""}
+              {ocChecking && <span className="ml-1 text-gray-400">检查中...</span>}
+            </p>
+            {ocCheck?.latest && (
+              <p className="mt-1 text-xs text-gray-500">最新: v{ocCheck.latest}</p>
+            )}
+            {ocCheck?.updateAvailable ? (
+              <p className="mt-1 text-xs font-medium text-amber-600">
+                有新版本可用（将随口袋龙虾下次更新一起升级）
               </p>
-              {versionInfo.updateAvailable ? (
-                <p className="text-sm font-medium text-indigo-600">有新版本可用</p>
-              ) : (
-                <p className="text-sm text-emerald-600">已是最新版本</p>
-              )}
-            </>
-          ) : (
-            !error && <p className="text-sm text-gray-400">未能获取最新版本信息</p>
-          )}
+            ) : ocCheck?.latest ? (
+              <p className="mt-1 text-xs text-emerald-600">已是最新</p>
+            ) : ocCheck?.error ? (
+              <p className="mt-1 text-xs text-gray-400">{ocCheck.error}</p>
+            ) : null}
+          </div>
         </div>
       )}
 
-      {/* Progress display during update */}
+      {/* PocketClaw update progress */}
       {(isInProgress || updateStatus.status === "complete" || updateStatus.status === "error") && (
         <div className="mt-3 space-y-2">
           <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -118,13 +133,17 @@ export function UpdateChecker() {
         </div>
       )}
 
+      {/* Buttons */}
       <div className="mt-3 flex flex-wrap gap-2">
         <button
-          onClick={() => void checkForUpdates()}
-          disabled={checking || isInProgress}
+          onClick={() => {
+            void checkForUpdates();
+            void checkOpenClaw();
+          }}
+          disabled={checking || ocChecking || isInProgress}
           className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
         >
-          {checking ? "检查中..." : "检查更新"}
+          {checking || ocChecking ? "检查中..." : "检查更新"}
         </button>
 
         {versionInfo?.updateAvailable && !isInProgress && updateStatus.status !== "complete" && (
@@ -133,32 +152,12 @@ export function UpdateChecker() {
             disabled={updating}
             className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
           >
-            一键更新
+            一键更新口袋龙虾
           </button>
         )}
       </div>
 
-      {/* OpenClaw kernel update */}
-      {versionInfo && !checking && versionInfo.openclawVersion && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => void handleOpenclawUpdate()}
-            disabled={ocUpdating}
-            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-          >
-            {ocUpdating ? "更新中..." : "更新 OpenClaw 内核"}
-          </button>
-          {ocResult && (
-            <span
-              className={`text-sm ${ocResult.includes("失败") ? "text-red-600" : "text-emerald-600"}`}
-            >
-              {ocResult}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Manual update instructions */}
+      {/* Manual update */}
       <div className="mt-3">
         <button
           onClick={() => setManualOpen(!manualOpen)}

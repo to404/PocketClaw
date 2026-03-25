@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.9] - 2026-03-25
+
+### Fixed
+
+- **OpenClaw 更新崩溃 (P0)**: 便携 Node.js 没有 npm，点击"更新 OpenClaw 内核"触发 `MODULE_NOT_FOUND` 崩溃并损坏安装。移除 npm-based 更新，改为只检查版本（通过 npm registry API）
+- **QQ URL 打不开**: `q.qq.com/qqbot/openclaw` 路径不存在，改回 `q.qq.com`
+- **66 个 ClawHub skills 不可见**: CI 用相对路径安装 + OpenClaw 默认 workspace 路径不匹配。修复：绝对路径 + 显式设置 `agents.defaults.workspace`
+
+### Changed
+
+- **更新检查 UX 重构**: PocketClaw 和 OpenClaw 分别显示当前版本/最新版本，各自独立检查。OpenClaw 更新提示"将随口袋龙虾下次更新一起升级"。一个"检查更新"按钮同时检查两者
+
 ## [1.2.8] - 2026-03-25
 
 ### Fixed
