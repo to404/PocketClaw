@@ -116,20 +116,28 @@ export function useUpdate(): UseUpdateReturn {
 
       let latest: string | undefined;
       let fetchError: string | null = null;
+      // Try Gitee first (accessible in China without VPN), then GitHub
+      const GITEE_API = "https://gitee.com/api/v5/repos/Austin5925/PocketClaw/releases/latest";
       try {
-        const res = await fetch(GITHUB_API, {
-          headers: { Accept: "application/vnd.github.v3+json" },
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { tag_name: string };
+        let apiRes = await fetch(GITEE_API, { signal: AbortSignal.timeout(5000) }).catch(
+          () => null,
+        );
+        if (!apiRes?.ok) {
+          apiRes = await fetch(GITHUB_API, {
+            headers: { Accept: "application/vnd.github.v3+json" },
+          });
+        }
+        if (apiRes?.ok) {
+          const data = (await apiRes.json()) as { tag_name: string };
           latest = data.tag_name.replace(/^v/, "");
-        } else if (res.status === 403) {
-          fetchError = "GitHub API 请求频率超限，请稍后再试";
-        } else {
-          fetchError = `无法获取最新版本 (HTTP ${String(res.status)})`;
+        } else if (apiRes) {
+          fetchError =
+            apiRes.status === 403
+              ? "API 请求频率超限，请稍后再试"
+              : `无法获取最新版本 (HTTP ${String(apiRes.status)})`;
         }
       } catch {
-        fetchError = "无法连接 GitHub，请检查网络";
+        fetchError = "无法连接更新服务器，请检查网络";
       }
 
       setVersionInfo({

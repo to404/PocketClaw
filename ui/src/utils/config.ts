@@ -40,6 +40,7 @@ const MODEL_PREFIX_TO_CONFIG_KEY: Record<string, string> = {
   zhipu: "glm",
   volcengine: "doubao",
   google: "gemini",
+  modelstudio: "qwen",
 };
 
 export function getProviderConfigKey(model: string): string {
@@ -79,7 +80,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     id: "qwen",
     name: "通义千问",
     description: "阿里出品，免费额度大",
-    models: ["qwen/qwen3.5-plus", "qwen/qwen3-max", "qwen/qwen-plus"],
+    models: ["modelstudio/qwen3.5-plus", "modelstudio/qwen3-max", "modelstudio/qwen-plus"],
     apiKeyUrl: "https://dashscope.console.aliyun.com/apiKey",
   },
   {
@@ -92,7 +93,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
   {
     id: "doubao",
     name: "豆包 (字节跳动)",
-    description: "字节出品，Seed 2.0 旗舰",
+    description: "字节出品，Seed 2.0 旗舰（API Key 以 sk- 开头）",
     models: [
       "volcengine/doubao-seed-2-0-pro-260215",
       "volcengine/doubao-seed-2-0-lite-260215",

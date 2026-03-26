@@ -137,6 +137,9 @@ export function PostSetup() {
                   })}
                 </div>
               )}
+              <p className="mt-1 text-xs text-gray-400">
+                切换模型后 AI 引擎会短暂重启（3-5 秒），请稍候
+              </p>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">API Key</span>

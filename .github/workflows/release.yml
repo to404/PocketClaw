@@ -145,7 +145,8 @@ jobs:
           failed=0
           while IFS= read -r slug; do
             [ -z "$slug" ] && continue
-            if clawhub install "$slug" --workdir "$WORKSPACE_DIR" 2>/dev/null; then
+            if clawhub install "$slug" --workdir "$WORKSPACE_DIR" 2>/dev/null || \
+               { sleep 3 && clawhub install "$slug" --workdir "$WORKSPACE_DIR" 2>/dev/null; }; then
               installed=$((installed + 1))
             else
               echo "WARN: Failed to install $slug"
@@ -306,7 +307,8 @@ jobs:
           failed=0
           while IFS= read -r slug; do
             [ -z "$slug" ] && continue
-            if clawhub install "$slug" --workdir "$WORKSPACE_DIR" 2>/dev/null; then
+            if clawhub install "$slug" --workdir "$WORKSPACE_DIR" 2>/dev/null || \
+               { sleep 3 && clawhub install "$slug" --workdir "$WORKSPACE_DIR" 2>/dev/null; }; then
               installed=$((installed + 1))
             else
               echo "WARN: Failed to install $slug"
@@ -380,3 +382,35 @@ jobs:
             --title "PocketClaw $VERSION" \
             --generate-notes \
             PocketClaw-*.zip SHA256SUMS.txt
+
+      - name: Create Gitee release
+        continue-on-error: true
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+
+          # Push tags to Gitee
+          git remote add gitee https://oauth2:${GITEE_TOKEN}@gitee.com/Austin5925/PocketClaw.git || true
+          git push gitee "v${VERSION}" --force 2>/dev/null || true
+
+          # Create Gitee release
+          RELEASE_ID=$(curl -s -X POST \
+            "https://gitee.com/api/v5/repos/Austin5925/PocketClaw/releases" \
+            -H "Content-Type: application/json" \
+            -d "{\"access_token\":\"${GITEE_TOKEN}\",\"tag_name\":\"v${VERSION}\",\"name\":\"PocketClaw v${VERSION}\",\"body\":\"Release v${VERSION}\"}" \
+            | jq -r '.id // empty')
+
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Gitee release created: $RELEASE_ID"
+            # Upload assets
+            for file in PocketClaw-*.zip SHA256SUMS.txt; do
+              echo "Uploading $file to Gitee..."
+              curl -s -X POST \
+                "https://gitee.com/api/v5/repos/Austin5925/PocketClaw/releases/${RELEASE_ID}/attach_files" \
+                -F "access_token=${GITEE_TOKEN}" \
+                -F "file=@${file}" || echo "WARN: Failed to upload $file"
+            done
+          else
+            echo "WARN: Failed to create Gitee release"
+          fi

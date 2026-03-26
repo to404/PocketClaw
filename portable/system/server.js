@@ -32,7 +32,7 @@ const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "no-referrer",
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:* https://api.github.com; font-src 'self'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:* https://api.github.com https://gitee.com; font-src 'self'",
 };
 
 const SHARED_CONFIG = JSON.parse(
@@ -346,12 +346,14 @@ function handleApiConfig(req, res) {
         // Without this check, saving an API key overwrites whatever model the user
         // selected in the 18789 Control UI.
         const modelChanged = parsed.agent?.model && parsed.agent.model !== existing.agent?.model;
+        const channelsChanged = JSON.stringify(parsed.channels || null) !== JSON.stringify(existing.channels || null);
         syncInternalConfig(parsed, { updateModel: modelChanged });
 
-        // If model changed, restart gateway so 18789 Control UI picks up new model.
-        // chokidar hot-reload updates runtime but does NOT push to WebSocket clients.
-        if (modelChanged) {
-          notifyGatewayRestart();
+        // Delay restart 500ms to let chokidar complete its hot-reload cycle (300ms debounce).
+        // Without this delay, the gateway restart races with hot-reload and may cache stale model.
+        const needsRestart = modelChanged || channelsChanged;
+        if (needsRestart) {
+          setTimeout(() => notifyGatewayRestart(), 500);
         }
 
         jsonResponse(res, 200, { success: true });
@@ -392,6 +394,56 @@ function handleApiOpenclawVersion(res) {
 
 let updateState = { status: "idle", progress: 0, error: null, version: null };
 
+/** Try Gitee first (accessible in China), then fallback to GitHub. */
+function fetchLatestRelease() {
+  const https = require("https");
+
+  const sources = [
+    {
+      name: "Gitee",
+      url: "https://gitee.com/api/v5/repos/Austin5925/PocketClaw/releases/latest",
+      headers: { "User-Agent": "PocketClaw" },
+      parseVersion: (data) => data.tag_name?.replace(/^v/, ""),
+      buildDownloadUrl: (ver) => `https://gitee.com/Austin5925/PocketClaw/releases/download/v${ver}/PocketClaw-v${ver}-update.zip`,
+    },
+    {
+      name: "GitHub",
+      url: "https://api.github.com/repos/Austin5925/PocketClaw/releases/latest",
+      headers: { "User-Agent": "PocketClaw", Accept: "application/vnd.github.v3+json" },
+      parseVersion: (data) => data.tag_name?.replace(/^v/, ""),
+      buildDownloadUrl: (ver) => `https://github.com/Austin5925/PocketClaw/releases/download/v${ver}/PocketClaw-v${ver}-update.zip`,
+    },
+  ];
+
+  return new Promise((resolve, reject) => {
+    let idx = 0;
+    const tryNext = () => {
+      if (idx >= sources.length) {
+        reject(new Error("无法获取最新版本（Gitee 和 GitHub 均不可达）"));
+        return;
+      }
+      const src = sources[idx++];
+      https.get(src.url, { headers: src.headers, timeout: 8000 }, (res) => {
+        let body = "";
+        res.on("data", (c) => { body += c; });
+        res.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            const ver = src.parseVersion(data);
+            if (ver) {
+              resolve({ version: ver, downloadUrl: src.buildDownloadUrl(ver), source: src.name });
+            } else {
+              tryNext();
+            }
+          } catch { tryNext(); }
+        });
+      }).on("error", () => tryNext())
+        .on("timeout", function() { this.destroy(); tryNext(); });
+    };
+    tryNext();
+  });
+}
+
 async function startUpdate() {
   const https = require("https");
   const { execSync } = require("child_process");
@@ -399,32 +451,9 @@ async function startUpdate() {
   try {
     updateState = { status: "checking", progress: 5, error: null, version: null };
 
-    // 1. Get latest version from GitHub API
-    const latestData = await new Promise((resolve, reject) => {
-      https.get(
-        "https://api.github.com/repos/Austin5925/PocketClaw/releases/latest",
-        {
-          headers: {
-            "User-Agent": "PocketClaw",
-            Accept: "application/vnd.github.v3+json",
-          },
-          timeout: 10000,
-        },
-        (res) => {
-          let data = "";
-          res.on("data", (c) => (data += c));
-          res.on("end", () => {
-            try {
-              resolve(JSON.parse(data));
-            } catch (e) {
-              reject(e);
-            }
-          });
-        },
-      ).on("error", reject);
-    });
-
-    const latestVersion = latestData.tag_name?.replace(/^v/, "");
+    // 1. Get latest version (Gitee first, then GitHub)
+    const release = await fetchLatestRelease();
+    const latestVersion = release.version;
     if (!latestVersion) throw new Error("无法获取最新版本信息");
 
     // Check current version
@@ -443,8 +472,8 @@ async function startUpdate() {
       version: latestVersion,
     };
 
-    // 2. Download update zip
-    const updateUrl = `https://github.com/Austin5925/PocketClaw/releases/download/v${latestVersion}/PocketClaw-v${latestVersion}-update.zip`;
+    // 2. Download update zip (using the URL from whichever source responded)
+    const updateUrl = release.downloadUrl;
     const tmpFile = path.join(
       require("os").tmpdir(),
       `pocketclaw-update-${latestVersion}.zip`,
@@ -703,7 +732,7 @@ function validateKeyRequest(validator, apiKey, model, res) {
     headers["Authorization"] = `Bearer ${apiKey}`;
   } else {
     headers["x-api-key"] = apiKey;
-    headers["anthropic-version"] = "2025-01-01";
+    headers["anthropic-version"] = "2023-06-01";
   }
 
   let postData = null;
@@ -733,13 +762,25 @@ function validateKeyRequest(validator, apiKey, model, res) {
   }
 
   const apiReq = https.request(options, (apiRes) => {
-    apiRes.resume(); // drain body
-    if (res.headersSent) return;
-    if (apiRes.statusCode === 401 || apiRes.statusCode === 403) {
-      jsonResponse(res, 200, { valid: false, error: "API Key 无效，请检查后重试" });
-    } else {
-      jsonResponse(res, 200, { valid: true });
-    }
+    let body = "";
+    apiRes.on("data", (c) => { body += c; });
+    apiRes.on("end", () => {
+      if (res.headersSent) return;
+      if (apiRes.statusCode === 401 || apiRes.statusCode === 403) {
+        // Try to extract error message from response body
+        let detail = "";
+        try {
+          const parsed = JSON.parse(body);
+          detail = parsed.error?.message || parsed.message || "";
+        } catch { /* not JSON */ }
+        const errorMsg = detail
+          ? `验证失败 (HTTP ${apiRes.statusCode}): ${detail}`
+          : `API Key 无效 (HTTP ${apiRes.statusCode})`;
+        jsonResponse(res, 200, { valid: false, error: errorMsg });
+      } else {
+        jsonResponse(res, 200, { valid: true });
+      }
+    });
   });
 
   apiReq.on("error", () => {
@@ -877,12 +918,30 @@ if (process.argv.includes("--supervisor")) {
     process.exit(1);
   }
 
+  // Apply proxy from user config (Settings -> 关于与更新 Tab)
+  if (config.proxy?.httpsProxy) {
+    process.env.HTTPS_PROXY = config.proxy.httpsProxy;
+    process.env.HTTP_PROXY = config.proxy.httpsProxy;
+  }
+
   // 3. Start gateway
   log("正在启动 AI 引擎...");
   let gatewayProcess = spawn(
     process.execPath,
     [openclawEntry, "gateway", "--port", String(GATEWAY_PORT), "--allow-unconfigured"],
-    { cwd: BASE_DIR, stdio: ["ignore", "pipe", "pipe"] },
+    {
+      cwd: BASE_DIR,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        OPENCLAW_HOME: path.join(DATA_DIR, ".openclaw"),
+        // Pass through proxy settings so OpenClaw can reach overseas APIs
+        ...(process.env.HTTPS_PROXY ? { HTTPS_PROXY: process.env.HTTPS_PROXY } : {}),
+        ...(process.env.HTTP_PROXY ? { HTTP_PROXY: process.env.HTTP_PROXY } : {}),
+        ...(process.env.ALL_PROXY ? { ALL_PROXY: process.env.ALL_PROXY } : {}),
+        ...(process.env.NO_PROXY ? { NO_PROXY: process.env.NO_PROXY } : {}),
+      },
+    },
   );
   // Write gateway output to log file for diagnostics
   const logPath = path.join(DATA_DIR, "pocketclaw.log");

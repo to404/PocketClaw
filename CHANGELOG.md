@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.19] - 2026-03-26
+
+### Fixed
+
+- **通义千问在 18789 不显示 (P0)**: OpenClaw 3.22 的 DashScope provider 名是 `modelstudio`（不是 `qwen`）。`qwen` 被映射到 `qwen-portal`（OAuth 流程），导致 API Key 路由不匹配。shared-config.json 和 config.ts 已修正
+- **Anthropic 验证失败**: `anthropic-version` 头从无效的 `2025-01-01` 改回 `2023-06-01`
+- **模型显示"慢一拍"**: gateway restart 前加 500ms 延迟，避免 chokidar hot-reload 竞态
+- **微信/频道启用后不显示**: channels 配置变更时也触发 gateway restart
+- **验证只说"无效"**: 现在返回 HTTP status + API 返回的详细错误信息
+- **Windows CI skills 随机失败**: 每个 skill 安装失败后等 3 秒重试一次
+
+### Added
+
+- **Gitee 国内更新源 (P0)**: 检查更新和下载优先走 Gitee（国内无梯子可用），fallback GitHub。CI 自动创建 Gitee Release 并上传安装包
+- **代理设置**: Settings "关于与更新" Tab 新增代理输入框，填写 HTTPS_PROXY 地址后传给 OpenClaw gateway，支持海外模型（GPT、Claude、Gemini）
+- **PostSetup 重启提示**: 模型选择器下方提示"切换后引擎重启 3-5 秒"
+- **豆包 API Key 提示**: 描述中注明 Key 以 `sk-` 开头
+
+### Changed
+
+- **devdocs 从 git 历史中彻底删除**: 之前误用 `git add -f` 将内部文档推到公开仓库，已通过 `git filter-repo` 清除并 force push
+
 ## [1.2.14] - 2026-03-26
 
 ### Fixed

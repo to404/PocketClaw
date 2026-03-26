@@ -4,7 +4,7 @@
     { "id": "deepseek", "envVar": "DEEPSEEK_API_KEY",  "validateUrl": "https://api.deepseek.com/models",                 "validateMethod": "GET",  "validateAuth": "bearer" },
     { "id": "moonshot", "envVar": "MOONSHOT_API_KEY",  "validateUrl": "https://api.moonshot.cn/v1/models",              "validateMethod": "GET",  "validateAuth": "bearer" },
     { "id": "kimi",     "openclawId": "moonshot", "envVar": "MOONSHOT_API_KEY",  "validateUrl": "https://api.moonshot.cn/v1/models",              "validateMethod": "GET",  "validateAuth": "bearer" },
-    { "id": "qwen",     "envVar": "DASHSCOPE_API_KEY", "validateUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1/models", "validateMethod": "GET", "validateAuth": "bearer" },
+    { "id": "qwen",     "openclawId": "modelstudio", "envVar": "DASHSCOPE_API_KEY", "validateUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1/models", "validateMethod": "GET", "validateAuth": "bearer" },
     { "id": "zhipu",    "envVar": "ZHIPUAI_API_KEY",   "validateUrl": "https://open.bigmodel.cn/api/paas/v4/models",   "validateMethod": "GET",  "validateAuth": "bearer" },
     { "id": "glm",      "openclawId": "zhipu",    "envVar": "ZHIPUAI_API_KEY",   "validateUrl": "https://open.bigmodel.cn/api/paas/v4/models",   "validateMethod": "GET",  "validateAuth": "bearer" },
     { "id": "openai",   "envVar": "OPENAI_API_KEY",    "validateUrl": "https://api.openai.com/v1/models",              "validateMethod": "GET",  "validateAuth": "bearer" },
@@ -39,7 +39,7 @@
       { "id": "moonshot-v1-128k", "name": "Moonshot V1 128K" }
     ]
   },
-  "qwen": {
+  "modelstudio": {
     "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "api": "openai-completions",
     "models": [

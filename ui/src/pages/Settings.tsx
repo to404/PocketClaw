@@ -400,6 +400,56 @@ function ProviderCard({
 /*  Settings page                                                     */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  ProxyInput — HTTPS_PROXY setting for overseas models               */
+/* ------------------------------------------------------------------ */
+
+function ProxyInput({
+  config,
+  updateConfig,
+}: {
+  config: OpenClawConfig | null;
+  updateConfig: (u: Partial<OpenClawConfig>) => Promise<void>;
+}) {
+  const current = (config as Record<string, unknown> | null)?.proxy as
+    | Record<string, string>
+    | undefined;
+  const [value, setValue] = useState(current?.httpsProxy ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateConfig({ proxy: { httpsProxy: value.trim() } } as Partial<OpenClawConfig>);
+      showToast("代理设置已保存，请重启口袋龙虾生效", "success");
+    } catch {
+      showToast("保存失败", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="http://127.0.0.1:7890"
+        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+        autoComplete="off"
+      />
+      <button
+        onClick={() => void handleSave()}
+        disabled={saving}
+        className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
+      >
+        {saving ? "..." : "保存"}
+      </button>
+    </div>
+  );
+}
+
 type SettingsTab = "apikeys" | "channels" | "about";
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -691,6 +741,15 @@ export function Settings() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Proxy settings for overseas models */}
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+                  <h3 className="mb-1 font-semibold text-gray-900 dark:text-gray-100">代理设置</h3>
+                  <p className="mb-3 text-xs text-gray-500">
+                    使用海外模型（GPT、Claude、Gemini）需要代理。填写后重启生效。
+                  </p>
+                  <ProxyInput config={config} updateConfig={updateConfig} />
                 </div>
 
                 {/* Update */}
