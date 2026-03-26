@@ -118,23 +118,21 @@ jobs:
 
       - name: Install channel plugins
         run: |
-          # Feishu is BUNDLED in OpenClaw 3.22+ (dist/extensions/feishu/) — do NOT npm install it.
-          # npm install @openclaw/feishu creates a conflicting openclaw dependency that breaks
-          # plugin-sdk/compat imports. Only install community (non-bundled) plugins here.
-          OPENCLAW_HOME="${GITHUB_WORKSPACE}/portable/data/.openclaw"
-          mkdir -p "$OPENCLAW_HOME"
-          cd "$OPENCLAW_HOME"
-          npm init -y 2>/dev/null || true
+          # Plugins MUST be installed alongside openclaw (same node_modules/) so they
+          # can resolve openclaw/plugin-sdk. Installing in $OPENCLAW_HOME/node_modules/
+          # fails because openclaw isn't there — only in app/core/node_modules/.
+          # Feishu is BUNDLED in OpenClaw 3.22+ — do NOT install it.
+          cd portable/app/core
           npm install @tencent-connect/openclaw-qqbot@latest @tencent-weixin/openclaw-weixin@latest 2>&1 || \
-            echo "WARN: Channel plugin installation failed — channels will not be available"
-          # CRITICAL: remove any openclaw package that npm pulled as a transitive dependency.
-          # If $OPENCLAW_HOME/node_modules/openclaw/ exists, Node.js module resolution
-          # finds it INSTEAD of app/core/node_modules/openclaw/, crashing the gateway on startup.
-          rm -rf node_modules/openclaw 2>/dev/null || true
-          rm -rf node_modules/@openclaw/feishu 2>/dev/null || true
+            echo "WARN: Channel plugin installation failed"
           echo "Installed channel plugins:"
           ls node_modules/@tencent-connect/ 2>/dev/null || true
           ls node_modules/@tencent-weixin/ 2>/dev/null || true
+          # Clean up any stale plugins from OPENCLAW_HOME (leftover from previous versions)
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/@tencent-connect" 2>/dev/null || true
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/@tencent-weixin" 2>/dev/null || true
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/@openclaw" 2>/dev/null || true
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/openclaw" 2>/dev/null || true
 
       - name: Pre-install ClawHub skills
         run: |
@@ -286,19 +284,18 @@ jobs:
       - name: Install channel plugins
         shell: bash
         run: |
-          # Feishu is BUNDLED in OpenClaw 3.22+ — do NOT npm install it.
-          OPENCLAW_HOME="${GITHUB_WORKSPACE}/portable/data/.openclaw"
-          mkdir -p "$OPENCLAW_HOME"
-          cd "$OPENCLAW_HOME"
-          npm init -y 2>/dev/null || true
+          # Plugins MUST be in same node_modules/ as openclaw for plugin-sdk resolution.
+          cd "${GITHUB_WORKSPACE}/portable/app/core"
           npm install @tencent-connect/openclaw-qqbot@latest @tencent-weixin/openclaw-weixin@latest 2>&1 || \
-            echo "WARN: Channel plugin installation failed — channels will not be available"
-          # CRITICAL: remove conflicting openclaw transitive dependency
-          rm -rf node_modules/openclaw 2>/dev/null || true
-          rm -rf node_modules/@openclaw/feishu 2>/dev/null || true
+            echo "WARN: Channel plugin installation failed"
           echo "Installed channel plugins:"
           ls node_modules/@tencent-connect/ 2>/dev/null || true
           ls node_modules/@tencent-weixin/ 2>/dev/null || true
+          # Clean up stale plugins from OPENCLAW_HOME
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/@tencent-connect" 2>/dev/null || true
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/@tencent-weixin" 2>/dev/null || true
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/@openclaw" 2>/dev/null || true
+          rm -rf "${GITHUB_WORKSPACE}/portable/data/.openclaw/node_modules/openclaw" 2>/dev/null || true
 
       - name: Pre-install ClawHub skills
         shell: bash

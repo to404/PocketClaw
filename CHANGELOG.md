@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.13] - 2026-03-26
+
+### Fixed
+
+- **启动崩溃 + 插件加载失败 (P0)**: 插件装在 `$OPENCLAW_HOME/node_modules/` 时无法 resolve `openclaw/plugin-sdk`（因为 openclaw 主包在 `app/core/node_modules/`）。修复：CI 改为将插件安装到 `app/core/node_modules/`（与 openclaw 同级），确保 Node.js 模块解析正确。清理旧版本残留在 `$OPENCLAW_HOME/node_modules/` 的所有插件和冲突包
+- **一键更新下载卡住**: 重定向响应未 drain + 无重试 + 无总超时。改为 3 次重试 + 5 分钟总超时 + `res.resume()` 释放连接
+
 ## [1.2.12] - 2026-03-26
 
 ### Fixed
