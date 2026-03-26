@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.11] - 2026-03-26
+
+### Fixed
+
+- **模型切换不生效 (P0)**: `handleSetDefault` 缺少 `sendRpc("secrets.reload")` 通知 gateway，模型变更只写文件不触发热重载
+- **用户添加的模型被覆盖 (P0)**: `syncInternalConfig` 每次无条件覆盖 `models.providers`，用户在 18789 手动添加的模型全部丢失。改为 MERGE 策略：保留已有模型，仅补充 shared-config.json 中缺失的
+- **Anthropic 验证失败**: `anthropic-version` 头从 `2023-06-01` 升级到 `2025-01-01`
+
+### Added
+
+- **微信 ClawBot 官方插件**: CI 安装 `@tencent-weixin/openclaw-weixin`，Settings 更新微信配置卡片，plugins.load.paths 注册插件路径
+- **ClawHub skills 安装改进**: CI 改用 `openclaw skills install` 命令（fallback 到 clawhub），设置 `OPENCLAW_STATE_DIR` 确保正确路径
+
+### Changed
+
+- **飞书文档补充**: 说明个人版用户需先创建团队/组织
+
 ## [1.2.10] - 2026-03-26
 
 ### Fixed

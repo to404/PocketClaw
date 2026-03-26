@@ -286,7 +286,7 @@ export function Onboarding() {
                     onChange={(e) => toggleChannel("wechat", "enabled", e.target.checked)}
                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  启用微信接入
+                  启用微信 ClawBot（需在 OpenClaw 控制台扫码配对）
                 </label>
               </ChannelCard>
             </div>

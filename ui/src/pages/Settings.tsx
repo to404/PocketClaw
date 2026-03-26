@@ -56,10 +56,12 @@ const CHANNEL_DEFS: ChannelDef[] = [
     id: "wechat",
     name: "微信",
     icon: "\uD83D\uDCAC",
-    description: "微信聊天机器人",
+    description: "微信 ClawBot 官方插件（扫码登录，无需公网）",
     fields: [],
+    tutorialUrl: "https://weixin.qq.com",
     experimental: true,
-    experimentalNote: "微信接入为实验性功能，使用第三方协议，可能存在风险",
+    experimentalNote:
+      "微信 ClawBot 为腾讯官方插件，需 iOS 微信 8.0.70+。启用后请在 OpenClaw 控制台 (18789) 完成扫码配对。",
   },
 ];
 
@@ -505,12 +507,13 @@ export function Settings() {
         await updateConfig({
           agent: { ...config?.agent, model: provider.models[0] ?? "" },
         });
+        sendRpc("secrets.reload", {});
         showToast(`已切换到 ${provider.name}`, "success");
       } catch {
         showToast("切换失败", "error");
       }
     },
-    [config, updateConfig],
+    [config, updateConfig, sendRpc],
   );
 
   /* ---- Channel handlers ---- */

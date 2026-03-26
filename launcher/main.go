@@ -431,6 +431,8 @@ func syncConfigToOpenClaw() {
 		filepath.Join(corePlugins, "@tencent-connect", "openclaw-qqbot"),
 		filepath.Join(homePlugins, "@openclaw", "feishu"),
 		filepath.Join(corePlugins, "@openclaw", "feishu"),
+		filepath.Join(homePlugins, "@tencent-weixin", "openclaw-weixin"),
+		filepath.Join(corePlugins, "@tencent-weixin", "openclaw-weixin"),
 	}
 	var pluginPaths []interface{}
 	for _, p := range pluginCandidates {

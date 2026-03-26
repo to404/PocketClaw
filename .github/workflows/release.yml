@@ -122,22 +122,26 @@ jobs:
           mkdir -p "$OPENCLAW_HOME"
           cd "$OPENCLAW_HOME"
           npm init -y 2>/dev/null || true
-          npm install @openclaw/feishu@latest @tencent-connect/openclaw-qqbot@latest 2>&1 || \
+          npm install @openclaw/feishu@latest @tencent-connect/openclaw-qqbot@latest @tencent-weixin/openclaw-weixin@latest 2>&1 || \
             echo "WARN: Channel plugin installation failed — channels will not be available"
           echo "Installed channel plugins:"
           ls node_modules/@openclaw/ 2>/dev/null || true
           ls node_modules/@tencent-connect/ 2>/dev/null || true
+          ls node_modules/@tencent-weixin/ 2>/dev/null || true
 
       - name: Pre-install ClawHub skills
         run: |
-          # Absolute path required — clawhub doesn't resolve relative OPENCLAW_HOME
           export OPENCLAW_HOME="${GITHUB_WORKSPACE}/portable/data/.openclaw"
+          export OPENCLAW_STATE_DIR="${GITHUB_WORKSPACE}/portable/data/.openclaw/.openclaw"
           mkdir -p "$OPENCLAW_HOME/workspace/skills"
+          OPENCLAW_CLI="${GITHUB_WORKSPACE}/portable/app/core/node_modules/openclaw/openclaw.mjs"
           installed=0
           failed=0
           while IFS= read -r slug; do
             [ -z "$slug" ] && continue
-            if npx clawhub@latest install "$slug" 2>/dev/null; then
+            if node "$OPENCLAW_CLI" skills install "$slug" 2>/dev/null; then
+              installed=$((installed + 1))
+            elif npx clawhub@latest install "$slug" 2>/dev/null; then
               installed=$((installed + 1))
             else
               echo "WARN: Failed to install $slug"
@@ -279,22 +283,27 @@ jobs:
           mkdir -p "$OPENCLAW_HOME"
           cd "$OPENCLAW_HOME"
           npm init -y 2>/dev/null || true
-          npm install @openclaw/feishu@latest @tencent-connect/openclaw-qqbot@latest 2>&1 || \
+          npm install @openclaw/feishu@latest @tencent-connect/openclaw-qqbot@latest @tencent-weixin/openclaw-weixin@latest 2>&1 || \
             echo "WARN: Channel plugin installation failed — channels will not be available"
           echo "Installed channel plugins:"
           ls node_modules/@openclaw/ 2>/dev/null || true
           ls node_modules/@tencent-connect/ 2>/dev/null || true
+          ls node_modules/@tencent-weixin/ 2>/dev/null || true
 
       - name: Pre-install ClawHub skills
         shell: bash
         run: |
           export OPENCLAW_HOME="${GITHUB_WORKSPACE}/portable/data/.openclaw"
+          export OPENCLAW_STATE_DIR="${GITHUB_WORKSPACE}/portable/data/.openclaw/.openclaw"
           mkdir -p "$OPENCLAW_HOME/workspace/skills"
+          OPENCLAW_CLI="${GITHUB_WORKSPACE}/portable/app/core/node_modules/openclaw/openclaw.mjs"
           installed=0
           failed=0
           while IFS= read -r slug; do
             [ -z "$slug" ] && continue
-            if npx clawhub@latest install "$slug" 2>/dev/null; then
+            if node "$OPENCLAW_CLI" skills install "$slug" 2>/dev/null; then
+              installed=$((installed + 1))
+            elif npx clawhub@latest install "$slug" 2>/dev/null; then
               installed=$((installed + 1))
             else
               echo "WARN: Failed to install $slug"

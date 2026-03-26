@@ -177,11 +177,24 @@ function syncInternalConfig(config) {
     const configKey = CONFIG_KEY_FOR_PROVIDER[providerKey] || providerKey;
     const apiKey = config[configKey]?.apiKey || config[providerKey]?.apiKey;
 
+    const existing = internal.models.providers[providerKey] || {};
+    // Merge models: keep user-added models from OpenClaw, add ours if missing
+    const existingModels = Array.isArray(existing.models) ? existing.models : [];
+    const sharedModels = Array.isArray(providerCfg.models) ? providerCfg.models : [];
+    const mergedModelIds = new Set(existingModels.map((m) => m.id || m));
+    const mergedModels = [...existingModels];
+    for (const m of sharedModels) {
+      if (!mergedModelIds.has(m.id || m)) {
+        mergedModels.push(m);
+      }
+    }
+
     internal.models.providers[providerKey] = {
+      ...existing,
       baseUrl: providerCfg.baseUrl,
-      apiKey: apiKey ?? undefined,
+      apiKey: apiKey ?? existing.apiKey,
       api: providerCfg.api,
-      models: providerCfg.models,
+      models: mergedModels,
     };
   }
 
@@ -199,7 +212,11 @@ function syncInternalConfig(config) {
     path.join(homePlugins, "@openclaw", "feishu"),
     path.join(corePlugins, "@openclaw", "feishu"),
   ];
-  for (const p of [...qqCandidates, ...feishuCandidates]) {
+  const wechatCandidates = [
+    path.join(homePlugins, "@tencent-weixin", "openclaw-weixin"),
+    path.join(corePlugins, "@tencent-weixin", "openclaw-weixin"),
+  ];
+  for (const p of [...qqCandidates, ...feishuCandidates, ...wechatCandidates]) {
     if (fs.existsSync(p)) pluginPaths.push(p);
   }
   if (pluginPaths.length > 0) {
@@ -598,7 +615,7 @@ function validateKeyRequest(validator, apiKey, model, res) {
     headers["Authorization"] = `Bearer ${apiKey}`;
   } else {
     headers["x-api-key"] = apiKey;
-    headers["anthropic-version"] = "2023-06-01";
+    headers["anthropic-version"] = "2025-01-01";
   }
 
   let postData = null;
