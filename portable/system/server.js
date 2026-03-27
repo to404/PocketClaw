@@ -561,14 +561,14 @@ async function startUpdate() {
     updateState.status = "extracting";
     updateState.progress = 70;
 
-    // 4. Extract (use unzip on Mac, PowerShell on Windows)
+    // 4. Extract — timeout 5 min (140MB zip to USB is slow, PowerShell Expand-Archive is sluggish)
     if (process.platform === "win32") {
       execSync(
         `powershell -Command "Expand-Archive -Path '${tmpFile}' -DestinationPath '${BASE_DIR}' -Force"`,
-        { timeout: 60000 },
+        { timeout: 300000 },
       );
     } else {
-      execSync(`unzip -qo "${tmpFile}" -d "${BASE_DIR}"`, { timeout: 60000 });
+      execSync(`unzip -qo "${tmpFile}" -d "${BASE_DIR}"`, { timeout: 300000 });
     }
 
     // 5. Update version.txt
