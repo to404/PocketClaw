@@ -83,6 +83,13 @@ func main() {
 	gatewayCmd.Dir = baseDir
 	gatewayCmd.Stdout = logFile
 	gatewayCmd.Stderr = logFile
+	// Disable non-consumer features via env vars (NOT config file — Zod strict rejects unknown keys)
+	gatewayCmd.Env = append(os.Environ(),
+		"OPENCLAW_HOME="+filepath.Join(baseDir, "data", ".openclaw"),
+		"OPENCLAW_SKIP_BROWSER_CONTROL_SERVER=1",
+		"OPENCLAW_DISABLE_BONJOUR=1",
+		"OPENCLAW_SKIP_CANVAS_HOST=1",
+	)
 	if err := gatewayCmd.Start(); err != nil {
 		showError("AI 引擎启动失败: " + err.Error())
 		return
@@ -379,26 +386,9 @@ func syncConfigToOpenClaw() {
 		internalConfig["agents"] = agents
 	}
 
-	// Disable non-consumer features
-	internalConfig["browser"] = map[string]interface{}{"enabled": false}
-	discovery, _ := internalConfig["discovery"].(map[string]interface{})
-	if discovery == nil {
-		discovery = make(map[string]interface{})
-	}
-	mdns, _ := discovery["mdns"].(map[string]interface{})
-	if mdns == nil {
-		mdns = make(map[string]interface{})
-	}
-	mdns["mode"] = "off"
-	discovery["mdns"] = mdns
-	internalConfig["discovery"] = discovery
-	update, _ := internalConfig["update"].(map[string]interface{})
-	if update == nil {
-		update = make(map[string]interface{})
-	}
-	update["checkOnStart"] = false
-	internalConfig["update"] = update
-	internalConfig["canvasHost"] = map[string]interface{}{"enabled": false}
+	// NOTE: browser, canvasHost, discovery.mdns, update.checkOnStart are NOT in
+	// OpenClaw's config file Zod schema. Writing them causes strict() validation
+	// failure → gateway crash. Disabled via env vars in gateway spawn instead.
 
 	// Sync ALL provider configs from shared-config.json (single source of truth).
 	// Must include ALL required fields (baseUrl, api, models) to pass Zod strict validation.

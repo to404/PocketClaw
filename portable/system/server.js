@@ -163,14 +163,14 @@ function syncInternalConfig(config, { updateModel = false } = {}) {
     internal.agents.defaults.model = "minimax/MiniMax-M2.7";
   }
 
-  // Disable developer/server features that confuse consumer users:
-  internal.agents.defaults.heartbeat = { every: "0" }; // Visible "Read HEARTBEAT.md" every 30 min
-  internal.browser = { enabled: false };                // CDP server on port 18791 (unnecessary)
-  if (!internal.discovery) internal.discovery = {};
-  if (!internal.discovery.mdns) internal.discovery.mdns = {};
-  internal.discovery.mdns.mode = "off";                 // Broadcasts presence on local network
-  internal.update = { ...(internal.update || {}), checkOnStart: false }; // Phones home to npmjs.org
-  internal.canvasHost = { enabled: false };              // Extra file server + watcher (unnecessary)
+  // Disable heartbeat (visible "Read HEARTBEAT.md" every 30 min in 18789 chat).
+  // heartbeat is part of agents.defaults which IS in the config schema.
+  internal.agents.defaults.heartbeat = { every: "0" };
+
+  // NOTE: browser, canvasHost, discovery.mdns, update.checkOnStart are NOT in
+  // OpenClaw's config file Zod schema (they're CLI/runtime params). Writing them
+  // to openclaw.json causes Zod strict() validation failure → gateway crash.
+  // These are disabled via env vars in the gateway spawn call instead.
 
   // Explicitly set workspace path so OpenClaw finds ClawHub skills.
   // Without this, OpenClaw defaults to ~/.openclaw/workspace/ which
@@ -940,10 +940,15 @@ if (process.argv.includes("--supervisor")) {
         ...process.env,
         OPENCLAW_HOME: path.join(DATA_DIR, ".openclaw"),
         // Pass through proxy settings so OpenClaw can reach overseas APIs
+        // Proxy passthrough
         ...(process.env.HTTPS_PROXY ? { HTTPS_PROXY: process.env.HTTPS_PROXY } : {}),
         ...(process.env.HTTP_PROXY ? { HTTP_PROXY: process.env.HTTP_PROXY } : {}),
         ...(process.env.ALL_PROXY ? { ALL_PROXY: process.env.ALL_PROXY } : {}),
         ...(process.env.NO_PROXY ? { NO_PROXY: process.env.NO_PROXY } : {}),
+        // Disable non-consumer features via env vars (NOT config file — Zod strict rejects unknown keys)
+        OPENCLAW_SKIP_BROWSER_CONTROL_SERVER: "1",
+        OPENCLAW_DISABLE_BONJOUR: "1",
+        OPENCLAW_SKIP_CANVAS_HOST: "1",
       },
     },
   );
