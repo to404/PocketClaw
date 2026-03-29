@@ -5,7 +5,11 @@ import { showToast } from "../components/Toast";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { useConfig } from "../hooks/useConfig";
 import { useGatewayConnection } from "../hooks/GatewayContext";
-import { getProviderConfigKey, MODEL_PROVIDERS } from "../utils/config";
+import {
+  getProviderConfigKey,
+  MODEL_PROVIDERS,
+  modelsForProviderSelection,
+} from "../utils/config";
 
 /** Notify OpenClaw gateway to reload config after model change.
  *  File-based chokidar detection is unreliable on Windows. */
@@ -30,9 +34,15 @@ export function PostSetup() {
   const modelDisplay = currentModel.split("/").pop() ?? "未配置";
   const configKey = currentModel ? getProviderConfigKey(currentModel) : "";
   const providerName = MODEL_PROVIDERS.find((p) => p.id === configKey)?.name ?? configKey;
-  const hasApiKey = Boolean(
-    configKey && (config?.[configKey] as Record<string, unknown> | undefined)?.apiKey,
-  );
+  const hasApiKey =
+    configKey === "custom"
+      ? Boolean(
+          (config?.custom as Record<string, unknown> | undefined)?.apiKey &&
+            (config?.custom as Record<string, unknown> | undefined)?.baseUrl,
+        )
+      : Boolean(
+          configKey && (config?.[configKey] as Record<string, unknown> | undefined)?.apiKey,
+        );
 
   useEffect(() => {
     let cancelled = false;
@@ -91,9 +101,15 @@ export function PostSetup() {
                 <div className="absolute left-0 right-0 z-10 mt-2 max-h-96 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 shadow-lg">
                   {MODEL_PROVIDERS.map((provider) => {
                     const provCfgKey = provider.id;
-                    const provHasKey = Boolean(
-                      (config?.[provCfgKey] as Record<string, unknown> | undefined)?.apiKey,
-                    );
+                    const provHasKey = provider.custom
+                      ? Boolean(
+                          (config?.custom as Record<string, unknown> | undefined)?.apiKey &&
+                            (config?.custom as Record<string, unknown> | undefined)?.baseUrl,
+                        )
+                      : Boolean(
+                          (config?.[provCfgKey] as Record<string, unknown> | undefined)?.apiKey,
+                        );
+                    const models = modelsForProviderSelection(provider, currentModel);
                     return (
                       <div key={provider.id}>
                         <div className="sticky top-0 bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-500">
@@ -102,7 +118,12 @@ export function PostSetup() {
                             <span className="ml-1 text-amber-500">（未配置 Key）</span>
                           )}
                         </div>
-                        {provider.models.map((model) => {
+                        {models.length === 0 && provider.custom ? (
+                          <div className="px-3 py-2 text-xs text-gray-400">
+                            请先在「设置 → 模型 API Key」中填写自定义 URL 与 Key
+                          </div>
+                        ) : null}
+                        {models.map((model) => {
                           const isActive = model === currentModel;
                           const modelLabel = model.split("/").pop() ?? model;
                           return (

@@ -431,6 +431,37 @@ func syncConfigToOpenClaw() {
 		}
 		modProviders[providerKey] = entry
 	}
+
+	delete(modProviders, "custom")
+	if agent, ok := ourConfig["agent"].(map[string]interface{}); ok {
+		if modelStr, ok := agent["model"].(string); ok && strings.HasPrefix(modelStr, "custom/") {
+			if cust, ok := ourConfig["custom"].(map[string]interface{}); ok {
+				baseURL, _ := cust["baseUrl"].(string)
+				apiKey, _ := cust["apiKey"].(string)
+				modelID := strings.TrimPrefix(strings.TrimSpace(modelStr), "custom/")
+				api := "openai-completions"
+				if a, ok := cust["api"].(string); ok && a == "anthropic-messages" {
+					api = "anthropic-messages"
+				}
+				baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+				displayName := modelID
+				if d, ok := cust["displayName"].(string); ok && strings.TrimSpace(d) != "" {
+					displayName = strings.TrimSpace(d)
+				}
+				if baseURL != "" && modelID != "" {
+					modProviders["custom"] = map[string]interface{}{
+						"baseUrl": baseURL,
+						"api":     api,
+						"apiKey":  apiKey,
+						"models": []interface{}{
+							map[string]interface{}{"id": modelID, "name": displayName},
+						},
+					}
+				}
+			}
+		}
+	}
+
 	models["providers"] = modProviders
 	internalConfig["models"] = models
 

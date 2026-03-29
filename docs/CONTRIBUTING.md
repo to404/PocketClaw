@@ -6,8 +6,14 @@
 
 1. Clone 仓库
 2. 进入 `ui/` 目录
-3. 运行 `pnpm install`
-4. 运行 `pnpm dev` 启动开发服务器
+3. 运行 `pnpm install`（或 `npm install`）
+4. 启动本地调试（二选一）：
+   - **一条命令**：`pnpm dev:full` — 同时起 PocketClaw `server.js`（端口 **3211**，负责 `/api` 与 `/ws` 转发）和 Vite（**3210**）。
+   - **两个终端**：先 `pnpm dev:api`，再 `pnpm dev`。
+
+浏览器打开 **http://localhost:3210**。`/api/config`、`/api/validate-key` 等由 `portable/system/server.js` 提供，不能像以前一样把代理指到 18789。
+
+聊天 WebSocket 仍会经 3211 转发到本机 **18789** 网关；若未启动便携版 AI 引擎，界面可用但聊天会连不上。
 
 ## 代码规范
 

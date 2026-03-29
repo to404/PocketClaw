@@ -123,6 +123,65 @@ const CONFIG_KEY_FOR_PROVIDER = Object.fromEntries(
     .map((p) => [p.openclawId, p.id]),
 );
 
+function normalizeCustomBaseUrl(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  return raw.trim().replace(/\/+$/, "");
+}
+
+function customModelIdFromUserConfig(config) {
+  const m = config.agent?.model;
+  if (typeof m === "string" && m.startsWith("custom/") && m.length > 7) {
+    return m.slice(7).trim();
+  }
+  const n = config.custom?.modelName;
+  if (typeof n === "string" && n.trim()) return n.trim();
+  return "";
+}
+
+/**
+ * Inject models.providers.custom when the active model is custom/... and config.custom is filled.
+ */
+function applyCustomProviderToInternal(config, internal) {
+  const agentModel = typeof config.agent?.model === "string" ? config.agent.model : "";
+  if (!agentModel.startsWith("custom/")) {
+    if (internal.models?.providers?.custom) delete internal.models.providers.custom;
+    return;
+  }
+
+  const cust = config.custom;
+  if (!cust || typeof cust !== "object") {
+    if (internal.models?.providers?.custom) delete internal.models.providers.custom;
+    return;
+  }
+
+  const baseUrl = normalizeCustomBaseUrl(cust.baseUrl);
+  const modelId = customModelIdFromUserConfig(config);
+  const apiKey = typeof cust.apiKey === "string" ? cust.apiKey : "";
+  const api =
+    cust.api === "anthropic-messages" ? "anthropic-messages" : "openai-completions";
+
+  if (!baseUrl || !modelId) {
+    if (internal.models?.providers?.custom) delete internal.models.providers.custom;
+    return;
+  }
+
+  if (!internal.models) internal.models = {};
+  if (!internal.models.providers) internal.models.providers = {};
+  const existing = internal.models.providers.custom || {};
+  const displayName =
+    typeof cust.displayName === "string" && cust.displayName.trim()
+      ? cust.displayName.trim()
+      : modelId;
+
+  internal.models.providers.custom = {
+    ...existing,
+    baseUrl,
+    api,
+    apiKey: apiKey || existing.apiKey,
+    models: [{ id: modelId, name: displayName }],
+  };
+}
+
 /**
  * Sync model + all provider configs to OpenClaw's internal config.
  * API keys go through auth-profiles.json primarily, but also written here
@@ -211,6 +270,9 @@ function syncInternalConfig(config, { updateModel = false } = {}) {
       models: mergedModels,
     };
   }
+
+  // User-defined OpenAI-compatible or Anthropic-compatible endpoint (config.custom + agent.model custom/...)
+  applyCustomProviderToInternal(config, internal);
 
   // Register community plugins ONLY if user has configured the corresponding channel.
   // Unconditionally loading plugins (especially openclaw-weixin) can crash/hang the
@@ -356,11 +418,13 @@ function handleApiConfig(req, res) {
         // selected in the 18789 Control UI.
         const modelChanged = parsed.agent?.model && parsed.agent.model !== existing.agent?.model;
         const channelsChanged = JSON.stringify(parsed.channels || null) !== JSON.stringify(existing.channels || null);
+        const customChanged =
+          JSON.stringify(parsed.custom || null) !== JSON.stringify(existing.custom || null);
         syncInternalConfig(parsed, { updateModel: modelChanged });
 
         // Delay restart 500ms to let chokidar complete its hot-reload cycle (300ms debounce).
         // Without this delay, the gateway restart races with hot-reload and may cache stale model.
-        const needsRestart = modelChanged || channelsChanged;
+        const needsRestart = modelChanged || channelsChanged || customChanged;
         if (needsRestart) {
           setTimeout(() => notifyGatewayRestart(), 500);
         }
@@ -704,10 +768,12 @@ function handleApiHealth(res) {
 
 // Loaded from shared-config.json (single source of truth for providers).
 const PROVIDER_VALIDATORS = Object.fromEntries(
-  SHARED_CONFIG.providers.map((p) => [
-    p.id,
-    { url: p.validateUrl, method: p.validateMethod, auth: p.validateAuth },
-  ]),
+  SHARED_CONFIG.providers
+    .filter((p) => p.validateUrl)
+    .map((p) => [
+      p.id,
+      { url: p.validateUrl, method: p.validateMethod, auth: p.validateAuth },
+    ]),
 );
 
 const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
@@ -800,6 +866,101 @@ function validateKeyRequest(validator, apiKey, model, res) {
   apiReq.end();
 }
 
+function requestUrlOnce(urlStr, headers, timeoutMs, callback) {
+  let u;
+  try {
+    u = new URL(urlStr);
+  } catch {
+    callback(new Error("bad url"), null);
+    return;
+  }
+  const lib = u.protocol === "http:" ? require("http") : require("https");
+  const opts = {
+    hostname: u.hostname,
+    port: u.port || (u.protocol === "http:" ? 80 : 443),
+    path: `${u.pathname}${u.search || ""}`,
+    method: "GET",
+    headers,
+    timeout: timeoutMs,
+  };
+  const req = lib.request(opts, (apiRes) => {
+    callback(null, apiRes);
+  });
+  req.on("error", (e) => callback(e, null));
+  req.on("timeout", () => {
+    req.destroy();
+    callback(new Error("timeout"), null);
+  });
+  req.end();
+}
+
+/** Try OpenAI-compatible /v1/models (or /models) with Bearer key. */
+function validateCustomProviderKey(baseUrl, apiKey, apiMode, res) {
+  const raw = normalizeCustomBaseUrl(baseUrl);
+  if (!raw || !apiKey) {
+    jsonResponse(res, 200, { valid: false, error: "请填写 API 根地址与 Key" });
+    return;
+  }
+
+  const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let root;
+  try {
+    root = new URL(withProto);
+  } catch {
+    jsonResponse(res, 200, { valid: false, error: "API 地址格式无效" });
+    return;
+  }
+
+  // Anthropic-compatible bases vary; skip remote probe (same as many CLI tools).
+  if (apiMode === "anthropic-messages") {
+    jsonResponse(res, 200, { valid: true });
+    return;
+  }
+
+  const origin = root.origin;
+  const pathname = (root.pathname || "").replace(/\/$/, "");
+  const urls = [
+    pathname.endsWith("/v1")
+      ? `${origin}${pathname}/models`
+      : `${origin}${pathname}/v1/models`,
+    `${origin}${pathname}/models`,
+  ];
+
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+
+  let i = 0;
+  const next = () => {
+    if (res.headersSent) return;
+    if (i >= urls.length) {
+      jsonResponse(res, 200, { valid: true });
+      return;
+    }
+    const url = urls[i++];
+    requestUrlOnce(url, headers, 8000, (err, apiRes) => {
+      if (res.headersSent) return;
+      if (err) {
+        next();
+        return;
+      }
+      apiRes.resume();
+      const code = apiRes.statusCode ?? 0;
+      if (code === 401 || code === 403) {
+        jsonResponse(res, 200, { valid: false, error: "API Key 无效或无权限" });
+        return;
+      }
+      if (code === 404) {
+        next();
+        return;
+      }
+      jsonResponse(res, 200, { valid: true });
+    });
+  };
+  next();
+}
+
 function handleApiValidateKey(req, res) {
   if (req.method !== "POST") {
     res.writeHead(405, SECURITY_HEADERS);
@@ -809,7 +970,13 @@ function handleApiValidateKey(req, res) {
 
   readBody(req, res, (body) => {
     try {
-      const { provider, apiKey, model } = JSON.parse(body);
+      const parsed = JSON.parse(body);
+      const { provider, apiKey, model, baseUrl, api } = parsed;
+      if (provider === "custom") {
+        const mode = api === "anthropic-messages" ? "anthropic-messages" : "openai-completions";
+        validateCustomProviderKey(baseUrl, apiKey, mode, res);
+        return;
+      }
       const validator = PROVIDER_VALIDATORS[provider];
       if (!validator || !apiKey) {
         jsonResponse(res, 200, { valid: true });

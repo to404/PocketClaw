@@ -5,7 +5,7 @@ import { ApiKeyInput } from "../components/ApiKeyInput";
 import { Logo } from "../components/Logo";
 import { useConfig } from "../hooks/useConfig";
 import { useGatewayConnection } from "../hooks/GatewayContext";
-import { MODEL_PROVIDERS, getProviderConfigKey } from "../utils/config";
+import { MODEL_PROVIDERS, getProviderConfigKey, type CustomApiMode } from "../utils/config";
 
 interface ChannelConfig {
   feishu?: { enabled: boolean; appId: string; appSecret: string };
@@ -21,6 +21,9 @@ export function Onboarding() {
   const { sendRpc } = useGatewayConnection();
   const [step, setStep] = useState(1);
   const [model, setModel] = useState("minimax/MiniMax-M2.7");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customModelName, setCustomModelName] = useState("");
+  const [customApi, setCustomApi] = useState<CustomApiMode>("openai-completions");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +36,17 @@ export function Onboarding() {
     if (!apiKey.trim()) {
       setError("请输入 API Key");
       return;
+    }
+
+    if (model.startsWith("custom/")) {
+      if (!customBaseUrl.trim()) {
+        setError("请填写 API 根地址");
+        return;
+      }
+      if (!customModelName.trim()) {
+        setError("请填写模型 ID");
+        return;
+      }
     }
 
     setSaving(true);
@@ -48,6 +62,8 @@ export function Onboarding() {
           provider: modelPrefix,
           apiKey: apiKey.trim(),
           model,
+          baseUrl: customBaseUrl.trim(),
+          api: customApi,
         }),
       });
       if (validateRes.ok) {
@@ -79,7 +95,15 @@ export function Onboarding() {
 
       const configUpdates: Record<string, unknown> = {
         agent: { model },
-        [configKey]: { apiKey: apiKey.trim() },
+        [configKey]:
+          configKey === "custom"
+            ? {
+                apiKey: apiKey.trim(),
+                baseUrl: customBaseUrl.trim(),
+                api: customApi,
+                modelName: customModelName.trim(),
+              }
+            : { apiKey: apiKey.trim() },
       };
 
       if (!skipChannels) {
@@ -126,7 +150,7 @@ export function Onboarding() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4">
-      <div className="w-full max-w-lg">
+      <div className="w-full max-w-lg [&:has([data-step2])]:max-w-5xl">
         {/* Progress bar */}
         <div className="mb-6 flex gap-2 px-2">
           {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
@@ -158,13 +182,27 @@ export function Onboarding() {
 
         {/* Step 2 — Model + API Key */}
         {step === 2 && (
-          <div className="rounded-2xl bg-white p-8 shadow-xl ring-1 ring-gray-100">
-            <h2 className="mb-1 text-lg font-semibold text-gray-900">选择 AI 模型</h2>
-            <p className="mb-4 text-sm text-gray-500">选择模型提供商并输入 API Key</p>
-            <ModelSelector value={model} onChange={setModel} />
+          <div
+            className="rounded-2xl bg-white p-7 shadow-xl ring-1 ring-gray-100 sm:p-9"
+            data-step2
+          >
+            <h2 className="mb-1.5 text-lg font-semibold text-gray-900">选择 AI 模型</h2>
+            <p className="mb-6 text-sm leading-relaxed text-gray-500">
+              选择模型提供商并输入 API Key
+            </p>
+            <ModelSelector
+              value={model}
+              onChange={setModel}
+              customBaseUrl={customBaseUrl}
+              customModelName={customModelName}
+              customApi={customApi}
+              onCustomBaseUrlChange={setCustomBaseUrl}
+              onCustomModelNameChange={setCustomModelName}
+              onCustomApiChange={setCustomApi}
+            />
 
-            <div className="mt-6">
-              <h3 className="mb-2 text-sm font-medium text-gray-700">输入 API Key</h3>
+            <div className="mt-8">
+              <h3 className="mb-2.5 text-sm font-medium text-gray-700">输入 API Key</h3>
               <ApiKeyInput value={apiKey} onChange={setApiKey} />
               {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
               {(() => {
@@ -180,6 +218,10 @@ export function Onboarding() {
                   >
                     前往 {provider?.name ?? "提供商"} 获取 API Key
                   </a>
+                ) : configKey === "custom" ? (
+                  <p className="mt-2 text-xs text-gray-500">
+                    自定义接口的 Key 由您的网关提供；请与 API 根地址来自同一服务。
+                  </p>
                 ) : null;
               })()}
             </div>

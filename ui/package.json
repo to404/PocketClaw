@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "cross-env UI_PORT=3211 node ../portable/system/server.js",
+    "dev:full": "concurrently -n backend,vite -c cyan,magenta \"cross-env UI_PORT=3211 node ../portable/system/server.js\" \"wait-on tcp:127.0.0.1:3211 && vite\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint src/",
@@ -40,6 +42,8 @@
     "@typescript-eslint/parser": "^8.57.1",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -50,6 +54,7 @@
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "wait-on": "^9.0.4"
   }
 }

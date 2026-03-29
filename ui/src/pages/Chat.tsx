@@ -6,7 +6,11 @@ import { useGateway } from "../hooks/useGateway";
 import { Channels } from "./Channels";
 import { Skills } from "./Skills";
 import { History } from "./History";
-import { MODEL_PROVIDERS, getProviderConfigKey } from "../utils/config";
+import {
+  MODEL_PROVIDERS,
+  getProviderConfigKey,
+  modelsForProviderSelection,
+} from "../utils/config";
 import { useConfig } from "../hooks/useConfig";
 import { showToast } from "../components/Toast";
 
@@ -83,20 +87,32 @@ export function Chat() {
   const currentProviderCfg = currentConfigKey
     ? (config?.[currentConfigKey] as Record<string, unknown> | undefined)
     : undefined;
-  const hasApiKey = Boolean(currentProviderCfg?.apiKey);
+  const customCfg = config?.custom as Record<string, unknown> | undefined;
+  const hasApiKey =
+    currentConfigKey === "custom"
+      ? Boolean(customCfg?.apiKey && customCfg?.baseUrl)
+      : Boolean(currentProviderCfg?.apiKey);
 
   const handleModelChange = async (model: string) => {
     setShowModelSelect(false);
     const configKey = getProviderConfigKey(model);
-    const providerCfg = configKey
-      ? (config?.[configKey] as Record<string, unknown> | undefined)
-      : undefined;
-    if (!providerCfg?.apiKey) {
+    const providerCfg =
+      configKey === "custom"
+        ? customCfg
+        : configKey
+          ? (config?.[configKey] as Record<string, unknown> | undefined)
+          : undefined;
+    if (configKey === "custom") {
+      if (!(providerCfg?.apiKey && providerCfg?.baseUrl)) {
+        showToast("请先在设置中配置自定义接口的 URL 与 API Key", "error");
+        return;
+      }
+    } else if (!providerCfg?.apiKey) {
       showToast("请先在设置中配置该模型的 API Key", "error");
       return;
     }
     try {
-      await updateConfig({ agent: { ...config?.agent, model }, [configKey]: config?.[configKey] });
+      await updateConfig({ agent: { ...config?.agent, model } });
       showToast(`已切换到 ${model.split("/").pop()}`, "success");
     } catch {
       showToast("切换模型失败", "error");
@@ -221,8 +237,10 @@ export function Chat() {
                     </button>
                     {showModelSelect && (
                       <div className="absolute right-0 bottom-full mb-1 w-56 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-700">
-                        {MODEL_PROVIDERS.map((p) =>
-                          p.models.map((m) => (
+                        {MODEL_PROVIDERS.flatMap((p) => {
+                          const models = modelsForProviderSelection(p, config?.agent?.model);
+                          if (p.custom && models.length === 0) return [];
+                          return models.map((m) => (
                             <button
                               key={m}
                               onClick={() => void handleModelChange(m)}
@@ -235,8 +253,8 @@ export function Chat() {
                               <span className="font-medium">{m.split("/").pop()}</span>
                               <span className="ml-1 text-gray-400">({p.name})</span>
                             </button>
-                          )),
-                        )}
+                          ));
+                        })}
                       </div>
                     )}
                   </div>

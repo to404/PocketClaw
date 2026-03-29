@@ -1,11 +1,16 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { useConfig } from "../hooks/useConfig";
 import { useGatewayConnection } from "../hooks/GatewayContext";
 import { useTheme } from "../hooks/useTheme";
 import { showToast } from "../components/Toast";
-import { getProviderConfigKey, MODEL_PROVIDERS } from "../utils/config";
+import {
+  BUILTIN_MODEL_PROVIDERS,
+  CUSTOM_MODEL_PROVIDER,
+  getProviderConfigKey,
+  type CustomApiMode,
+} from "../utils/config";
 import type { ModelProvider, OpenClawConfig } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -417,6 +422,282 @@ function ProviderCard({
 }
 
 /* ------------------------------------------------------------------ */
+/*  CustomProviderCard — OpenAI/Anthropic-compatible endpoint           */
+/* ------------------------------------------------------------------ */
+
+function CustomProviderCard({
+  config,
+  updateConfig,
+  sendRpc,
+  activeConfigKey,
+  getCardState,
+  patchCard,
+}: {
+  config: OpenClawConfig | null;
+  updateConfig: (u: Partial<OpenClawConfig>) => Promise<void>;
+  sendRpc: (method: string, params: Record<string, unknown>) => void;
+  activeConfigKey: string;
+  getCardState: (id: string) => ProviderCardState;
+  patchCard: (id: string, patch: Partial<ProviderCardState>) => void;
+}) {
+  const custom = (config?.custom ?? {}) as Record<string, unknown>;
+  const agentModel = typeof config?.agent?.model === "string" ? config.agent.model : "";
+  const [baseUrl, setBaseUrl] = useState("");
+  const [modelName, setModelName] = useState("");
+  const [api, setApi] = useState<CustomApiMode>("openai-completions");
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setBaseUrl(typeof custom.baseUrl === "string" ? custom.baseUrl : "");
+    const suffix = agentModel.startsWith("custom/")
+      ? agentModel.slice(7)
+      : typeof custom.modelName === "string"
+        ? custom.modelName
+        : "";
+    setModelName(suffix);
+    setApi(
+      custom.api === "anthropic-messages" ? "anthropic-messages" : "openai-completions",
+    );
+  }, [config?.custom, agentModel]);
+
+  const isActive = activeConfigKey === "custom";
+  const hasSavedKey = Boolean(custom.apiKey && custom.baseUrl);
+  const state = getCardState("custom");
+  const { apiKey, saving, validationStatus } = state;
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) {
+      showToast("请输入 API Key", "error");
+      return;
+    }
+    if (!baseUrl.trim() || !modelName.trim()) {
+      showToast("请填写 API 根地址和模型 ID", "error");
+      return;
+    }
+    patchCard("custom", { saving: true });
+    try {
+      await updateConfig({
+        custom: {
+          ...(config?.custom as object),
+          baseUrl: baseUrl.trim(),
+          modelName: modelName.trim(),
+          api,
+          apiKey: apiKey.trim(),
+        },
+        agent: { ...config?.agent, model: `custom/${modelName.trim()}` },
+      });
+      sendRpc("secrets.reload", {});
+      showToast("自定义接口已保存", "success");
+      patchCard("custom", { saving: false, apiKey: "", validationStatus: "idle" });
+    } catch {
+      showToast("保存失败", "error");
+      patchCard("custom", { saving: false });
+    }
+  };
+
+  const handleValidate = async () => {
+    if (!apiKey.trim()) return;
+    patchCard("custom", { validationStatus: "validating" });
+    try {
+      const res = await fetch("/api/validate-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "custom",
+          apiKey: apiKey.trim(),
+          model: `custom/${modelName.trim() || "model"}`,
+          baseUrl: baseUrl.trim(),
+          api,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { valid?: boolean };
+        patchCard("custom", {
+          validationStatus: data.valid ? "success" : "error",
+        });
+        showToast(data.valid ? "验证通过" : "验证失败", data.valid ? "success" : "error");
+      } else {
+        patchCard("custom", { validationStatus: "error" });
+        showToast("验证失败", "error");
+      }
+    } catch {
+      patchCard("custom", { validationStatus: "error" });
+      showToast("验证请求失败", "error");
+    }
+  };
+
+  const handleSetDefault = async () => {
+    if (!modelName.trim()) {
+      showToast("请先填写模型 ID", "error");
+      return;
+    }
+    try {
+      await updateConfig({
+        agent: { ...config?.agent, model: `custom/${modelName.trim()}` },
+      });
+      sendRpc("secrets.reload", {});
+      showToast(`已切换到 ${CUSTOM_MODEL_PROVIDER.name}`, "success");
+    } catch {
+      showToast("切换失败", "error");
+    }
+  };
+
+  const statusIndicator = (() => {
+    if (validationStatus === "validating") {
+      return (
+        <svg className="h-5 w-5 animate-spin text-indigo-500" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+          />
+        </svg>
+      );
+    }
+    if (validationStatus === "success") {
+      return (
+        <span className="text-lg text-green-500" title="验证通过">
+          &#x2705;
+        </span>
+      );
+    }
+    if (validationStatus === "error") {
+      return (
+        <span className="text-lg text-red-500" title="验证失败">
+          &#x274C;
+        </span>
+      );
+    }
+    if (hasSavedKey) {
+      return (
+        <span className="text-lg text-green-500" title="已配置">
+          &#x2705;
+        </span>
+      );
+    }
+    return (
+      <span className="text-lg text-yellow-500" title="未配置">
+        &#x26A0;&#xFE0F;
+      </span>
+    );
+  })();
+
+  return (
+    <div
+      className={`rounded-2xl border bg-white p-5 transition-colors dark:border-gray-700 dark:bg-gray-800 ${
+        isActive
+          ? "border-l-4 border-l-indigo-500 border-t-gray-200 border-r-gray-200 border-b-gray-200"
+          : "border-gray-200"
+      }`}
+    >
+      <div className="mb-1 flex items-center justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+            {CUSTOM_MODEL_PROVIDER.name}
+          </h4>
+          {isActive && (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900 dark:text-green-300">
+              当前使用
+            </span>
+          )}
+          {statusIndicator}
+        </div>
+        {!isActive && (
+          <button
+            type="button"
+            onClick={() => void handleSetDefault()}
+            className="rounded-lg px-3 py-1 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30"
+          >
+            设为默认
+          </button>
+        )}
+      </div>
+      <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+        {CUSTOM_MODEL_PROVIDER.description}
+      </p>
+
+      <div className="mb-3 grid gap-2 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className="mb-0.5 block text-xs text-gray-500">API 根地址</label>
+          <input
+            type="url"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://…/v1"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-xs text-gray-500">模型 ID</label>
+          <input
+            type="text"
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
+            placeholder="与服务商文档一致"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-xs text-gray-500">接口类型</label>
+          <select
+            value={api}
+            onChange={(e) => setApi(e.target.value as CustomApiMode)}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+          >
+            <option value="openai-completions">OpenAI 兼容</option>
+            <option value="anthropic-messages">Anthropic 兼容</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1">
+          <input
+            type={visible ? "text" : "password"}
+            value={apiKey}
+            onChange={(e) => patchCard("custom", { apiKey: e.target.value })}
+            placeholder={hasSavedKey ? "已配置，重新输入以更新" : "API Key"}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-16 font-mono text-sm focus:border-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            autoComplete="new-password"
+            data-1p-ignore
+            data-lpignore="true"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            onClick={() => setVisible(!visible)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600"
+          >
+            {visible ? "隐藏" : "显示"}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleValidate()}
+          disabled={!apiKey || validationStatus === "validating"}
+          className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          验证
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={!apiKey || saving}
+          className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
+        >
+          {saving ? "..." : "保存"}
+        </button>
+      </div>
+      <p className="text-xs text-gray-400 dark:text-gray-500">
+        保存时会将当前模型设为 <code className="rounded bg-gray-100 px-1 dark:bg-gray-700">custom/模型ID</code>{" "}
+        并写入网关配置。
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Settings page                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -646,8 +927,8 @@ export function Settings() {
     );
   }
 
-  const domesticProviders = MODEL_PROVIDERS.filter((p) => isDomestic(p.id));
-  const overseasProviders = MODEL_PROVIDERS.filter((p) => !isDomestic(p.id));
+  const domesticProviders = BUILTIN_MODEL_PROVIDERS.filter((p) => isDomestic(p.id));
+  const overseasProviders = BUILTIN_MODEL_PROVIDERS.filter((p) => !isDomestic(p.id));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900">
@@ -689,15 +970,28 @@ export function Settings() {
 
         {/* ---- Main content ---- */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="mx-auto max-w-2xl space-y-6">
+          <div className="mx-auto max-w-4xl space-y-6">
             {/* ======== Tab: 模型 API Key ======== */}
             {activeTab === "apikeys" && (
               <>
                 <section>
                   <h2 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">
+                    自定义接口
+                  </h2>
+                  <CustomProviderCard
+                    config={config}
+                    updateConfig={updateConfig}
+                    sendRpc={sendRpc}
+                    activeConfigKey={activeConfigKey}
+                    getCardState={getCardState}
+                    patchCard={patchCard}
+                  />
+                </section>
+                <section>
+                  <h2 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">
                     国内模型
                   </h2>
-                  <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {domesticProviders.map((provider) => (
                       <ProviderCard
                         key={provider.id}
@@ -717,7 +1011,7 @@ export function Settings() {
                   <h2 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">
                     海外模型（需海外网络）
                   </h2>
-                  <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {overseasProviders.map((provider) => (
                       <ProviderCard
                         key={provider.id}

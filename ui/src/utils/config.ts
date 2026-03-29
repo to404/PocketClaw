@@ -1,4 +1,4 @@
-import type { OpenClawConfig, ModelProvider } from "../types";
+import type { CustomProviderConfig, ModelProvider, OpenClawConfig } from "../types";
 
 const API_BASE = "/api";
 
@@ -48,7 +48,18 @@ export function getProviderConfigKey(model: string): string {
   return MODEL_PREFIX_TO_CONFIG_KEY[prefix] ?? prefix;
 }
 
-export const MODEL_PROVIDERS: ModelProvider[] = [
+export type CustomApiMode = NonNullable<CustomProviderConfig["api"]>;
+
+/** Shown first in onboarding; uses config.custom + agent.model custom/... */
+export const CUSTOM_MODEL_PROVIDER: ModelProvider = {
+  id: "custom",
+  name: "自定义",
+  description: "OpenAI / Anthropic 兼容，填写网关 URL 与模型 ID",
+  models: [],
+  custom: true,
+};
+
+const BUILTIN_MODEL_PROVIDERS: ModelProvider[] = [
   {
     id: "minimax",
     name: "MiniMax",
@@ -131,3 +142,25 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     apiKeyUrl: "https://aistudio.google.com/app/apikey",
   },
 ];
+
+/** All selectable providers: custom first, then built-ins. */
+export const MODEL_PROVIDERS: ModelProvider[] = [
+  CUSTOM_MODEL_PROVIDER,
+  ...BUILTIN_MODEL_PROVIDERS,
+];
+
+/** Built-in providers only (Settings sections, etc.). */
+export { BUILTIN_MODEL_PROVIDERS };
+
+export function modelsForProviderSelection(
+  provider: ModelProvider,
+  agentModel: string | undefined,
+): string[] {
+  if (provider.custom) {
+    if (typeof agentModel === "string" && agentModel.startsWith("custom/")) {
+      return [agentModel];
+    }
+    return [];
+  }
+  return provider.models;
+}

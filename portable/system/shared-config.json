@@ -1,5 +1,6 @@
 {
   "providers": [
+    { "id": "custom", "envVar": "CUSTOM_OPENAI_API_KEY" },
     { "id": "minimax",  "envVar": "MINIMAX_API_KEY",  "validateUrl": "https://api.minimaxi.com/v1/models", "validateMethod": "GET", "validateAuth": "bearer" },
     { "id": "deepseek", "envVar": "DEEPSEEK_API_KEY",  "validateUrl": "https://api.deepseek.com/models",                 "validateMethod": "GET",  "validateAuth": "bearer" },
     { "id": "moonshot", "envVar": "MOONSHOT_API_KEY",  "validateUrl": "https://api.moonshot.cn/v1/models",              "validateMethod": "GET",  "validateAuth": "bearer" },
