@@ -40,10 +40,10 @@ export function UpdateChecker() {
 
       {versionInfo && !checking && (
         <div className="space-y-3">
-          {/* PocketClaw version */}
+          {/* OpenClawU盘便携版 app version */}
           <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              口袋龙虾 v{versionInfo.current}
+              OpenClawU盘便携版 v{versionInfo.current}
             </p>
             {versionInfo.latest && (
               <p className="mt-1 text-xs text-gray-500">最新: v{versionInfo.latest}</p>
@@ -61,14 +61,14 @@ export function UpdateChecker() {
               OpenClaw 内核 {versionInfo.openclawVersion ? `v${versionInfo.openclawVersion}` : ""}
             </p>
             <p className="mt-1 text-xs text-gray-400">
-              内核版本随口袋龙虾更新自动升级，无需手动操作。OpenClaw
+              内核版本随OpenClawU盘便携版更新自动升级，无需手动操作。OpenClaw
               Control（localhost:18789）控制台中的 &quot;Update Now&quot; 按钮不可用。
             </p>
           </div>
         </div>
       )}
 
-      {/* PocketClaw update progress */}
+      {/* OpenClawU盘便携版 update progress */}
       {(isInProgress || updateStatus.status === "complete" || updateStatus.status === "error") && (
         <div className="mt-3 space-y-2">
           <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -87,7 +87,7 @@ export function UpdateChecker() {
           )}
           {updateStatus.status === "complete" && (
             <p className="text-sm font-medium text-emerald-600">
-              更新完成，请关闭窗口重新启动口袋龙虾
+              更新完成，请关闭窗口重新启动OpenClawU盘便携版
             </p>
           )}
           {updateStatus.status === "error" && updateStatus.error && (
@@ -114,7 +114,7 @@ export function UpdateChecker() {
             disabled={updating}
             className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
           >
-            一键更新口袋龙虾
+            一键更新OpenClawU盘便携版
           </button>
         )}
       </div>

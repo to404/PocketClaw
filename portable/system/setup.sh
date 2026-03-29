@@ -19,7 +19,7 @@ declare -A NODE_SHA256=(
     ["win-x64"]="877cb93829e14fffbbc7903e7d8037336c9a79f3ea43c5d0b8c2379b79da56de"
 )
 
-log() { echo "[口袋龙虾] $*"; }
+log() { echo "[OpenClawU盘便携版] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
 
 verify_sha256() {
@@ -129,8 +129,8 @@ install_openclaw() {
     # Release packages built by CI include pre-built assets at dist/control-ui/.
     # For development: clone openclaw repo, run `pnpm ui:build`, copy dist/control-ui/ to portable/dist/control-ui/
     if [ ! -f "$BASE_DIR/dist/control-ui/index.html" ]; then
-        log "NOTE: Control UI assets not found at dist/control-ui/. Port 18789 UI will not be available."
-        log "      Release packages include pre-built assets. For dev: see setup.sh comments."
+        log "NOTE: Control UI assets not found at dist/control-ui/. Port 18789 web UI will show a warning."
+        log "      Run: bash \"$(cd "$BASE_DIR/.." && pwd)/scripts/build-control-ui.sh\"  (needs git + pnpm)"
     fi
 }
 
@@ -147,7 +147,7 @@ setup_data() {
 }
 
 main() {
-    log "=== 口袋龙虾 Setup ==="
+    log "=== OpenClawU盘便携版 Setup ==="
     log "Base directory: $BASE_DIR"
 
     local mode="${1:-all}"

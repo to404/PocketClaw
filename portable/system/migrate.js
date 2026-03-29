@@ -5,7 +5,7 @@ const baseDir = process.argv[2] || path.resolve(__dirname, "..");
 const configPath = path.join(baseDir, "data", ".openclaw", "openclaw.json");
 
 function log(msg) {
-  console.log(`[口袋龙虾] ${msg}`);
+  console.log(`[OpenClawU盘便携版] ${msg}`);
 }
 
 function migrate() {

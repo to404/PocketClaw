@@ -1,5 +1,5 @@
 /**
- * Integration tests for PocketClaw server API endpoints.
+ * Integration tests for OpenClawU盘便携版 server API endpoints.
  * Uses Node.js built-in test runner (node --test).
  *
  * Starts the actual server on a random port, sends real HTTP requests,

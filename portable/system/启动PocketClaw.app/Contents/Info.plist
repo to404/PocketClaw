@@ -5,7 +5,7 @@
     <key>CFBundleExecutable</key>
     <string>launcher</string>
     <key>CFBundleName</key>
-    <string>PocketClaw</string>
+    <string>OpenClawU盘便携版</string>
     <key>CFBundleDisplayName</key>
     <string>启动PocketClaw</string>
     <key>CFBundleIdentifier</key>

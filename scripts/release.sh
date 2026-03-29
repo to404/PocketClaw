@@ -9,7 +9,7 @@ VERSION=$(cat "$PORTABLE_DIR/version.txt" 2>/dev/null | tr -d '[:space:]')
 
 log() { echo "[Release] $*"; }
 
-log "=== PocketClaw Release v${VERSION} ==="
+log "=== OpenClawU盘便携版 Release v${VERSION} ==="
 
 FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.tar.gz"
 UPDATE_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-update.tar.gz"

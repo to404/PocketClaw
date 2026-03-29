@@ -7,7 +7,7 @@ VERSION_FILE="$BASE_DIR/version.txt"
 BACKUP_DIR="$BASE_DIR/data/backups"
 GITHUB_REPO="Austin5925/PocketClaw"
 
-log() { echo "[口袋龙虾] $*"; }
+log() { echo "[OpenClawU盘便携版] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
 
 get_current_version() {
@@ -96,7 +96,7 @@ run_migration() {
 }
 
 main() {
-    log "=== 口袋龙虾 Update ==="
+    log "=== OpenClawU盘便携版 Update ==="
 
     local current=$(get_current_version)
     log "Current version: v${current}"
@@ -122,7 +122,7 @@ main() {
     run_migration
 
     log "=== Update Complete ==="
-    log "Please restart 口袋龙虾 to apply the update."
+    log "Please restart OpenClawU盘便携版 to apply the update."
 }
 
 main "$@"

@@ -1,6 +1,6 @@
 # API Key 获取指南
 
-口袋龙虾支持 9 家 AI 模型提供商。选择一家注册即可使用。
+OpenClawU盘便携版支持 9 家 AI 模型提供商。选择一家注册即可使用。
 
 ## 推荐：国内模型（免翻墙）
 
@@ -55,7 +55,7 @@
 3. 进入 API Keys → Create new secret key
 4. 复制 Key
 
-> **中转站：** 如果无法直接访问 OpenAI，可以使用 API 中转服务。在口袋龙虾的"模型 API Key"设置中，目前使用的是默认端点。如需使用中转站，需手动修改 `portable/system/shared-config.json` 中对应 provider 的 `baseUrl`。
+> **中转站：** 如果无法直接访问 OpenAI，可以使用 API 中转服务。在OpenClawU盘便携版的"模型 API Key"设置中，目前使用的是默认端点。如需使用中转站，需手动修改 `portable/system/shared-config.json` 中对应 provider 的 `baseUrl`。
 
 ### Anthropic (Claude)
 
@@ -71,7 +71,7 @@
 3. 进入 API Keys → Create API Key
 4. 复制 Key
 
-## 在口袋龙虾中配置
+## 在OpenClawU盘便携版中配置
 
 1. 打开 http://localhost:3210/settings
 2. 点击左侧 **模型 API Key** Tab

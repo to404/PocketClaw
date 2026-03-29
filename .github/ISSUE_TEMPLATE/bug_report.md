@@ -26,7 +26,7 @@ labels: bug
 ## 环境信息
 
 - 操作系统: (如 macOS 15, Windows 11)
-- PocketClaw 版本: (如 v1.0.0)
+- OpenClawU盘便携版 版本: (如 v1.0.0)
 - U 盘型号: (可选)
 
 ## 错误日志

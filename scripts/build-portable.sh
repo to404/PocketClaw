@@ -9,7 +9,7 @@ VERSION=$(cat "$PORTABLE_DIR/version.txt" 2>/dev/null | tr -d '[:space:]')
 
 log() { echo "[Build Portable] $*"; }
 
-log "=== Building PocketClaw v${VERSION} Portable Package ==="
+log "=== Building OpenClawU盘便携版 v${VERSION} Portable Package ==="
 
 # Step 1: Build UI
 log "Step 1: Building UI..."

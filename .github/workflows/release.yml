@@ -381,7 +381,7 @@ jobs:
           git push origin "$VERSION"
 
           gh release create "$VERSION" \
-            --title "PocketClaw $VERSION" \
+            --title "OpenClawU盘便携版 $VERSION" \
             --generate-notes \
             PocketClaw-*.zip SHA256SUMS.txt
 

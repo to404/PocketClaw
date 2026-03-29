@@ -144,7 +144,7 @@ export function Onboarding() {
           <div className="rounded-2xl bg-white p-8 shadow-xl ring-1 ring-gray-100">
             <div className="flex flex-col items-center py-8">
               <Logo size={80} className="mb-6" />
-              <h1 className="text-3xl font-bold text-gray-900">欢迎使用口袋龙虾</h1>
+              <h1 className="text-3xl font-bold text-gray-900">欢迎使用OpenClawU盘便携版</h1>
               <p className="mt-2 text-gray-500">便携 AI 助手，插上即用</p>
               <button
                 onClick={() => setStep(2)}

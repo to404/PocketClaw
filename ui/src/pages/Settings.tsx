@@ -441,7 +441,7 @@ function ProxyInput({
     setSaving(true);
     try {
       await updateConfig({ proxy: { httpsProxy: value.trim() } } as Partial<OpenClawConfig>);
-      showToast("代理设置已保存，请重启口袋龙虾生效", "success");
+      showToast("代理设置已保存，请重启OpenClawU盘便携版生效", "success");
     } catch {
       showToast("保存失败", "error");
     } finally {
@@ -795,7 +795,7 @@ export function Settings() {
                 <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
                   <h3 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">关于</h3>
                   <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                    <p>口袋龙虾 — 便携 AI 助手</p>
+                    <p>OpenClawU盘便携版 — 便携 AI 助手</p>
                     <p>基于 OpenClaw (MIT) 构建</p>
                     <div className="pt-2">
                       <a

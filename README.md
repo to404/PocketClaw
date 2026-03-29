@@ -1,4 +1,4 @@
-# 口袋龙虾 (PocketClaw)
+# OpenClawU盘便携版
 
 **便携 AI 助手 — 插上 U 盘，双击即用**
 

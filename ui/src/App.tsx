@@ -17,7 +17,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 
   componentDidCatch(error: Error) {
-    console.error("[口袋龙虾] Uncaught error:", error);
+    console.error("[OpenClawU盘便携版] Uncaught error:", error);
   }
 
   render() {

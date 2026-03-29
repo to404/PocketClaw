@@ -30,9 +30,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **豆包重命名**: "豆包（字节跳动）" → "豆包（火山引擎）"，移除 sk- 前缀提示
-- **更新界面简化**: 移除 OpenClaw 独立更新检查，改为显示"内核随口袋龙虾自动升级"提示
+- **更新界面简化**: 移除 OpenClaw 独立更新检查，改为显示"内核随OpenClawU盘便携版自动升级"提示
 - **模型切换提示**: 增加"切换后请在 18789 刷新页面（F5）"说明
-- **18789 Update Now 说明**: 告知用户该按钮不可用，更新通过口袋龙虾进行
+- **18789 Update Now 说明**: 告知用户该按钮不可用，更新通过OpenClawU盘便携版进行
 
 ## [1.2.19] - 2026-03-26
 
@@ -114,7 +114,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **更新检查 UX 重构**: PocketClaw 和 OpenClaw 分别显示当前版本/最新版本，各自独立检查。OpenClaw 更新提示"将随口袋龙虾下次更新一起升级"。一个"检查更新"按钮同时检查两者
+- **更新检查 UX 重构**: OpenClawU盘便携版 和 OpenClaw 分别显示当前版本/最新版本，各自独立检查。OpenClaw 更新提示"将随 OpenClawU盘便携版 下次更新一起升级"。一个"检查更新"按钮同时检查两者
 
 ## [1.2.8] - 2026-03-25
 
@@ -127,7 +127,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **OpenClaw 内核一键更新**: 新增 `/api/openclaw-update` 端点 + UpdateChecker 中独立的"更新 OpenClaw 内核"按钮，执行 `npm install openclaw@latest`
-- **PocketClaw 和 OpenClaw 分别检查更新**: UpdateChecker 显示双版本并各自提供更新入口
+- **OpenClawU盘便携版 和 OpenClaw 分别检查更新**: UpdateChecker 显示双版本并各自提供更新入口
 
 ## [1.2.7] - 2026-03-25
 
@@ -141,7 +141,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **OpenClaw 内核版本显示**: 新增 `/api/openclaw-version` 端点，UpdateChecker 同时显示口袋龙虾版本和 OpenClaw 内核版本
+- **OpenClaw 内核版本显示**: 新增 `/api/openclaw-version` 端点，UpdateChecker 同时显示 OpenClawU盘便携版 版本和 OpenClaw 内核版本
 - **引导第三步教程链接**: 飞书和 QQ 配置卡片下方增加平台教程入口
 
 ## [1.2.6] - 2026-03-25
@@ -154,7 +154,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **UpdateChecker 优化**: 显示口袋龙虾版本标签，GitHub 获取失败时显示明确错误而非误导性"已是最新"
+- **UpdateChecker 优化**: 显示 OpenClawU盘便携版 版本标签，GitHub 获取失败时显示明确错误而非误导性"已是最新"
 - **PostSetup 提示**: 提醒用户可随时回 3210 修改 API Key 和频道配置
 
 ## [1.2.4] - 2026-03-24
@@ -200,7 +200,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **品牌重塑**: 所有用户可见文本从 "PocketClaw" 更名为 "口袋龙虾"，终端 banner、UI 标题、日志前缀全部更新
+- **品牌重塑**: 用户可见文本从 "PocketClaw"/"口袋龙虾" 统一为 "OpenClawU盘便携版"，终端 banner、UI 标题、日志前缀全部更新
 - **OpenClaw Logo**: 替换 emoji 龙虾为 OpenClaw 官方 SVG 龙虾 logo（红色渐变卡通风格），Sidebar 和 favicon 统一
 - **每个 Provider 独立 API Key 卡片**: 设置页从单输入框改为 9 张 provider 配置卡片（国内 6 + 海外 3），支持独立保存、验证、设为默认
 - **飞书/QQ/微信频道配置**: 在设置页和 Channels 页面添加飞书（WebSocket 模式）、QQ 机器人（官方平台）、微信（实验性）的配置入口

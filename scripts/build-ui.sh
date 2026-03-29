@@ -8,7 +8,7 @@ DEST_DIR="$PROJECT_ROOT/portable/app/ui/dist"
 
 log() { echo "[Build UI] $*"; }
 
-log "Building PocketClaw UI..."
+log "Building OpenClawU盘便携版 UI..."
 
 cd "$UI_DIR"
 

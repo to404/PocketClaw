@@ -413,7 +413,7 @@ function fetchLatestRelease() {
     {
       name: "GitHub",
       url: "https://api.github.com/repos/Austin5925/PocketClaw/releases/latest",
-      headers: { "User-Agent": "PocketClaw", Accept: "application/vnd.github.v3+json" },
+      headers: { "User-Agent": "OpenClawUSB-Portable", Accept: "application/vnd.github.v3+json" },
       parseVersion: (data) => data.tag_name?.replace(/^v/, ""),
       buildDownloadUrl: (ver) => `${OSS_BASE}/v${ver}/PocketClaw-v${ver}-update.zip`,
     },
@@ -496,7 +496,7 @@ async function startUpdate() {
           const proto = currentUrl.startsWith("http://") ? require("http") : https;
           const req = proto.get(
             currentUrl,
-            { headers: { "User-Agent": "PocketClaw" }, timeout: 30000 },
+            { headers: { "User-Agent": "OpenClawUSB-Portable" }, timeout: 30000 },
             (res) => {
               // Follow redirects (GitHub → CDN)
               if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -649,7 +649,7 @@ function handleApiUpdateStatus(res) {
 
 // ---------------------------------------------------------------------------
 // OpenClaw kernel version check: /api/openclaw-check (GET)
-// Portable runtime has no npm — OpenClaw updates are delivered via PocketClaw
+// Portable runtime has no npm — OpenClaw updates ship with OpenClawU盘便携版 releases
 // release packages. This endpoint only CHECKS for updates (no install).
 // ---------------------------------------------------------------------------
 
@@ -1027,10 +1027,10 @@ if (process.argv.includes("--supervisor")) {
   const startUI = () => {
     log("正在启动界面...");
     server.listen(UI_PORT, "127.0.0.1", () => {
-      log("口袋龙虾已启动！");
+      log("OpenClawU盘便携版已启动！");
       log(`浏览器地址: http://localhost:${UI_PORT}`);
       log("");
-      log("关闭此窗口即可退出口袋龙虾");
+      log("关闭此窗口即可退出OpenClawU盘便携版");
       openBrowser(`http://localhost:${UI_PORT}`);
     });
   };
@@ -1039,9 +1039,9 @@ if (process.argv.includes("--supervisor")) {
 } else {
   // Normal mode: just start the UI server (gateway managed by Go launcher)
   server.listen(UI_PORT, "127.0.0.1", () => {
-    console.log(`[口袋龙虾 UI] Server running at http://localhost:${UI_PORT}`);
+    console.log(`[OpenClawU盘便携版 UI] Server running at http://localhost:${UI_PORT}`);
     console.log(
-      `[口袋龙虾 UI] Gateway proxy: ws://localhost:${UI_PORT}/ws -> ws://${GATEWAY_HOST}:${GATEWAY_PORT}`,
+      `[OpenClawU盘便携版 UI] Gateway proxy: ws://localhost:${UI_PORT}/ws -> ws://${GATEWAY_HOST}:${GATEWAY_PORT}`,
     );
   });
 }
