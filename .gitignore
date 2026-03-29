@@ -54,6 +54,7 @@ temp/
 *.log
 
 # === 用户数据（U 盘运行时生成） ===
+portable/data/.openclaw/.openclaw/
 portable/data/.openclaw/credentials/
 portable/data/memory/*.md
 portable/data/backups/*
