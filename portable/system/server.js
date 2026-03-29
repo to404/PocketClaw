@@ -890,8 +890,18 @@ function openBrowser(url) {
 }
 
 if (process.argv.includes("--supervisor")) {
-  const { spawn } = require("child_process");
+  const { spawn, execSync } = require("child_process");
   const log = (msg) => console.log(`  ${msg}`);
+  const supervisorExit = (code) => {
+    if (code !== 0 && process.platform === "win32") {
+      try {
+        execSync("pause", { stdio: "inherit", shell: true });
+      } catch {
+        /* user closed console */
+      }
+    }
+    process.exit(code);
+  };
 
   // 1. Config sync
   const configPath = path.join(DATA_DIR, ".openclaw", "openclaw.json");
@@ -919,7 +929,7 @@ if (process.argv.includes("--supervisor")) {
   const openclawEntry = findOpenClawEntry();
   if (!openclawEntry) {
     log("[错误] AI 引擎未找到，请确认文件完整。");
-    process.exit(1);
+    supervisorExit(1);
   }
 
   // Apply proxy from user config (Settings -> 关于与更新 Tab)
@@ -986,39 +996,53 @@ if (process.argv.includes("--supervisor")) {
     }
     if (code !== null && code !== 0) {
       log(`[错误] AI 引擎异常退出 (code ${code})`);
-      process.exit(1);
+      log(`详细日志: ${logPath}`);
+      supervisorExit(1);
     }
   });
 
   // 4. Wait for gateway health
   const waitForGateway = () => {
     let elapsed = 0;
+    const retry = () => {
+      elapsed++;
+      if (elapsed > 90) {
+        log("[错误] AI 引擎启动超时（若网关较慢，可查看日志排查）");
+        log(`详细日志: ${logPath}`);
+        cleanup();
+        supervisorExit(1);
+      }
+      if (elapsed % 5 === 0) log(`仍在加载中...（已等待 ${elapsed} 秒）`);
+      setTimeout(check, 1000);
+    };
     const check = () => {
+      // req.destroy() after timeout also emits "error"; guard so we only retry once per probe.
+      let settled = false;
+      const failOnce = () => {
+        if (settled) return;
+        settled = true;
+        retry();
+      };
+      const okOnce = () => {
+        if (settled) return;
+        settled = true;
+        log("AI 引擎已启动");
+        startUI();
+      };
       const req = http.get(
         `http://127.0.0.1:${GATEWAY_PORT}/health`,
         { timeout: 2000 },
         (res) => {
           res.resume();
-          if (res.statusCode === 200) {
-            log("AI 引擎已启动");
-            startUI();
-          } else {
-            retry();
-          }
+          if (res.statusCode === 200) okOnce();
+          else failOnce();
         },
       );
-      req.on("error", retry);
-      req.on("timeout", () => { req.destroy(); retry(); });
-    };
-    const retry = () => {
-      elapsed++;
-      if (elapsed > 60) {
-        log("[错误] AI 引擎启动超时");
-        cleanup();
-        process.exit(1);
-      }
-      if (elapsed % 5 === 0) log(`仍在加载中...（已等待 ${elapsed} 秒）`);
-      setTimeout(check, 1000);
+      req.on("error", failOnce);
+      req.on("timeout", () => {
+        req.destroy();
+        failOnce();
+      });
     };
     check();
   };
