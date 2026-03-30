@@ -381,9 +381,8 @@ function syncInternalConfig(config, { updateModel = false } = {}) {
   // User-defined OpenAI-compatible or Anthropic-compatible endpoint (config.custom + agent.model custom/...)
   applyCustomProviderToInternal(config, internal);
 
-  // Register community plugins ONLY if user has configured the corresponding channel.
-  // Unconditionally loading plugins (especially openclaw-weixin) can crash/hang the
-  // gateway at startup even when unconfigured — unlike bundled plugins which skip gracefully.
+  // Register community plugins on-demand only.
+  // Load channel plugins only when user has configured and enabled that channel.
   const corePlugins = path.join(BASE_DIR, "app", "core", "node_modules");
   const pluginPaths = [];
   const userChannels = (config.channels && typeof config.channels === "object") ? config.channels : {};
@@ -393,10 +392,18 @@ function syncInternalConfig(config, { updateModel = false } = {}) {
     "openclaw-weixin": path.join(corePlugins, "@tencent-weixin", "openclaw-weixin"),
     // Feishu is BUNDLED in OpenClaw 3.22+ — never register here
   };
-  for (const [channelId, pluginPath] of Object.entries(pluginMap)) {
-    if (userChannels[channelId] && fs.existsSync(pluginPath)) {
-      pluginPaths.push(pluginPath);
-    }
+  const isChannelEnabled = (channelId) => {
+    const ch = userChannels[channelId];
+    if (!ch || typeof ch !== "object" || Array.isArray(ch)) return false;
+    return ch.enabled !== false;
+  };
+  const qqPluginPath = pluginMap.qqbot;
+  const weixinPluginPath = pluginMap["openclaw-weixin"];
+  if (fs.existsSync(qqPluginPath) && isChannelEnabled("qqbot")) {
+    pluginPaths.push(qqPluginPath);
+  }
+  if (fs.existsSync(weixinPluginPath) && isChannelEnabled("openclaw-weixin")) {
+    pluginPaths.push(weixinPluginPath);
   }
 
   // Clean up stale plugins from $OPENCLAW_HOME/node_modules/ left by previous versions.
@@ -405,59 +412,44 @@ function syncInternalConfig(config, { updateModel = false } = {}) {
   if (fs.existsSync(stalePluginDir)) {
     try { fs.rmSync(stalePluginDir, { recursive: true, force: true }); } catch { /* ok */ }
   }
+  if (!internal.plugins) internal.plugins = {};
+  if (!internal.plugins.load) internal.plugins.load = {};
   if (pluginPaths.length > 0) {
-    if (!internal.plugins) internal.plugins = {};
-    if (!internal.plugins.load) internal.plugins.load = {};
     internal.plugins.load.paths = pluginPaths;
+  } else if (internal.plugins.load && internal.plugins.load.paths) {
+    delete internal.plugins.load.paths;
   }
 
-  // Pass channels config if any channel plugins are found.
-  const hasPlugins = pluginPaths.length > 0;
-  // OpenClaw treats `channels` as the full channel set when present. Replacing it with only
-  // plugin keys (e.g. openclaw-weixin) hides bundled adapters like feishu. Merge with any
-  // existing internal.channels and stub missing bundled entries so the gateway still lists them.
-  const CHANNEL_STUB_DEFAULTS = {
-    feishu: { enabled: false },
-  };
-  if (hasPlugins && config.channels && typeof config.channels === "object") {
-    const prev =
-      internal.channels && typeof internal.channels === "object" && !Array.isArray(internal.channels)
-        ? { ...internal.channels }
-        : {};
-    const channels = { ...prev };
-    for (const [id, incomingRaw] of Object.entries(config.channels)) {
-      const incoming =
-        incomingRaw && typeof incomingRaw === "object" && !Array.isArray(incomingRaw)
-          ? incomingRaw
-          : null;
-      const existing = channels[id];
-      // Preserve runtime-populated channel fields (e.g. openclaw-weixin.accounts)
-      // when user config only updates shallow flags like enabled.
-      if (
-        incoming &&
-        existing &&
-        typeof existing === "object" &&
-        !Array.isArray(existing)
-      ) {
-        channels[id] = { ...existing, ...incoming };
-      } else {
-        channels[id] = incomingRaw;
-      }
-    }
-    for (const [id, stub] of Object.entries(CHANNEL_STUB_DEFAULTS)) {
-      if (channels[id] === undefined) {
-        channels[id] = stub;
-      }
-    }
-    const hasWeixinPlugin = pluginPaths.some((p) => String(p).includes("openclaw-weixin"));
-    if (hasWeixinPlugin && channels["openclaw-weixin"] === undefined) {
-      channels["openclaw-weixin"] = { enabled: true };
-    }
-    internal.channels = channels;
-  } else if (!hasPlugins) {
-    delete internal.channels;
+  // Keep default channel list from previous internal config, but manage feishu/qqbot/weixin on-demand.
+  const MANAGED_CHANNELS = new Set(["feishu", "qqbot", "openclaw-weixin"]);
+  const prevChannels =
+    internal.channels && typeof internal.channels === "object" && !Array.isArray(internal.channels)
+      ? internal.channels
+      : {};
+  const channels = {};
+  for (const [id, raw] of Object.entries(prevChannels)) {
+    if (!MANAGED_CHANNELS.has(id)) channels[id] = raw;
   }
-  // If hasPlugins but no config.channels: leave internal.channels as-is (don't write empty {})
+  const incomingChannels =
+    config.channels && typeof config.channels === "object" && !Array.isArray(config.channels)
+      ? config.channels
+      : {};
+  for (const [id, incomingRaw] of Object.entries(incomingChannels)) {
+    if (!MANAGED_CHANNELS.has(id)) continue;
+    const incoming =
+      incomingRaw && typeof incomingRaw === "object" && !Array.isArray(incomingRaw)
+        ? incomingRaw
+        : null;
+    if (!incoming || incoming.enabled === false) continue;
+    const existing = prevChannels[id];
+    if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+      channels[id] = { ...existing, ...incoming };
+    } else {
+      channels[id] = incoming;
+    }
+  }
+  if (Object.keys(channels).length > 0) internal.channels = channels;
+  else delete internal.channels;
 
   fs.mkdirSync(internalDir, { recursive: true, mode: 0o700 });
   fs.writeFileSync(

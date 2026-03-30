@@ -465,8 +465,8 @@ func syncConfigToOpenClaw() {
 	models["providers"] = modProviders
 	internalConfig["models"] = models
 
-	// Register community plugins ONLY if user has configured the corresponding channel.
-	// Unconditionally loading plugins (especially openclaw-weixin) crashes/hangs the gateway.
+	// Register community plugins on-demand only.
+	// Load channel plugins only when user has configured and enabled that channel.
 	corePlugins := filepath.Join(baseDir, "app", "core", "node_modules")
 	// Clean up stale plugins from $OPENCLAW_HOME/node_modules/ left by v1.2.7-v1.2.12
 	staleDir := filepath.Join(baseDir, "data", ".openclaw", "node_modules")
@@ -477,12 +477,34 @@ func syncConfigToOpenClaw() {
 		"openclaw-weixin": filepath.Join(corePlugins, "@tencent-weixin", "openclaw-weixin"),
 	}
 	var pluginPaths []interface{}
-	for channelId, pluginPath := range pluginMap {
-		if userChannels[channelId] != nil {
-			if _, err := os.Stat(pluginPath); err == nil {
-				pluginPaths = append(pluginPaths, pluginPath)
-			}
+	isChannelEnabled := func(channelId string) bool {
+		raw, ok := userChannels[channelId]
+		if !ok {
+			return false
 		}
+		cfg, ok := raw.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		enabled, exists := cfg["enabled"]
+		if !exists {
+			return true
+		}
+		b, ok := enabled.(bool)
+		if !ok {
+			return true
+		}
+		return b
+	}
+	_, qqErr := os.Stat(pluginMap["qqbot"])
+	hasQqPlugin := qqErr == nil
+	_, weixinErr := os.Stat(pluginMap["openclaw-weixin"])
+	hasWeixinPlugin := weixinErr == nil
+	if hasQqPlugin && isChannelEnabled("qqbot") {
+		pluginPaths = append(pluginPaths, pluginMap["qqbot"])
+	}
+	if hasWeixinPlugin && isChannelEnabled("openclaw-weixin") {
+		pluginPaths = append(pluginPaths, pluginMap["openclaw-weixin"])
 	}
 	if len(pluginPaths) > 0 {
 		plugins, _ := internalConfig["plugins"].(map[string]interface{})
@@ -496,59 +518,64 @@ func syncConfigToOpenClaw() {
 		load["paths"] = pluginPaths
 		plugins["load"] = load
 		internalConfig["plugins"] = plugins
+	} else {
+		if plugins, ok := internalConfig["plugins"].(map[string]interface{}); ok {
+			if load, ok := plugins["load"].(map[string]interface{}); ok {
+				delete(load, "paths")
+				plugins["load"] = load
+				internalConfig["plugins"] = plugins
+			}
+		}
 	}
 
-	// Pass channels config if any channel plugins are found.
-	// Same merge/stub rules as portable/system/server.js: a bare { openclaw-weixin } must not
-	// replace the whole channels map or bundled adapters disappear from the gateway.
-	channelStubDefaults := map[string]map[string]interface{}{
-		"feishu": {"enabled": false},
+	// Keep default channel list from previous internal config, but manage feishu/qqbot/weixin on-demand.
+	managedChannels := map[string]bool{
+		"feishu":          true,
+		"qqbot":           true,
+		"openclaw-weixin": true,
 	}
-	if len(pluginPaths) > 0 {
-		if userCh, ok := ourConfig["channels"].(map[string]interface{}); ok && len(userCh) > 0 {
-			merged := make(map[string]interface{})
-			if prev, ok := internalConfig["channels"].(map[string]interface{}); ok {
-				for k, v := range prev {
-					merged[k] = v
-				}
-			}
-			for k, v := range userCh {
-				if incomingMap, ok := v.(map[string]interface{}); ok {
-					if existingMap, ok2 := merged[k].(map[string]interface{}); ok2 {
-						// Preserve runtime-populated channel fields (e.g. accounts) while
-						// still allowing user config to override shallow keys like enabled.
-						next := make(map[string]interface{}, len(existingMap)+len(incomingMap))
-						for ek, ev := range existingMap {
-							next[ek] = ev
-						}
-						for ik, iv := range incomingMap {
-							next[ik] = iv
-						}
-						merged[k] = next
-						continue
-					}
-				}
-				merged[k] = v
-			}
-			for id, stub := range channelStubDefaults {
-				if _, exists := merged[id]; !exists {
-					merged[id] = stub
-				}
-			}
-			hasWeixinPlugin := false
-			for _, p := range pluginPaths {
-				if s, ok := p.(string); ok && strings.Contains(s, "openclaw-weixin") {
-					hasWeixinPlugin = true
-					break
-				}
-			}
-			if hasWeixinPlugin {
-				if _, exists := merged["openclaw-weixin"]; !exists {
-					merged["openclaw-weixin"] = map[string]interface{}{"enabled": true}
-				}
-			}
-			internalConfig["channels"] = merged
+	prevChannels := map[string]interface{}{}
+	if prev, ok := internalConfig["channels"].(map[string]interface{}); ok {
+		for k, v := range prev {
+			prevChannels[k] = v
 		}
+	}
+	newChannels := map[string]interface{}{}
+	for k, v := range prevChannels {
+		if !managedChannels[k] {
+			newChannels[k] = v
+		}
+	}
+	if userCh, ok := ourConfig["channels"].(map[string]interface{}); ok && len(userCh) > 0 {
+		for id, raw := range userCh {
+			if !managedChannels[id] {
+				continue
+			}
+			incomingMap, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if enabledRaw, exists := incomingMap["enabled"]; exists {
+				if enabledBool, ok := enabledRaw.(bool); ok && !enabledBool {
+					continue
+				}
+			}
+			if existingMap, ok := prevChannels[id].(map[string]interface{}); ok {
+				next := make(map[string]interface{}, len(existingMap)+len(incomingMap))
+				for ek, ev := range existingMap {
+					next[ek] = ev
+				}
+				for ik, iv := range incomingMap {
+					next[ik] = iv
+				}
+				newChannels[id] = next
+				continue
+			}
+			newChannels[id] = incomingMap
+		}
+	}
+	if len(newChannels) > 0 {
+		internalConfig["channels"] = newChannels
 	} else {
 		delete(internalConfig, "channels")
 	}
