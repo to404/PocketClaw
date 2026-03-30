@@ -40,9 +40,9 @@
 - **双击即用** — 一个文件启动一切，开箱即用
 - **小白友好** — 简洁中文界面，4 步引导式配置
 - **多模型支持** — MiniMax、DeepSeek、Kimi、通义千问、智谱、Claude、GPT、Gemini 等 9 家
-- **聊天平台集成** — 飞书、QQ、微信 ClawBot（WebSocket/长连接，无需公网 IP）
+- **聊天平台集成** — 飞书、QQ、微信 ClawBot（WebSocket/长连接，无需公网 IP；QQ/微信依赖已随 setup 装入 `app/core`）
 - **跨平台** — macOS (Apple Silicon / Intel) + Windows 10/11
-- **一键更新** — 界面内检查更新，一键升级
+- **版本信息** — 设置「关于与更新」中可查看当前便携包与 OpenClaw 内核版本（不向线上比对 Release）；升级请从官方发布渠道获取完整包替换
 - **完全开源** — MIT 许可证，代码透明
 
 ## 修改配置
@@ -69,7 +69,7 @@
 - [API Key 获取指南](docs/api-keys.md)
 - [飞书 / QQ / 微信配置](docs/channels.md)
 - [常见问题](docs/FAQ.md)
-- [反馈建议](mailto:ausdina@proton.me)
+- [反馈建议](mailto:omochi6666@gmail.com)
 
 ## 面向开发者
 

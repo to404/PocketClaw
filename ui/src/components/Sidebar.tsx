@@ -20,7 +20,7 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { path: "/", icon: "💬", label: "聊天" },
-  { path: "/channels", icon: "📡", label: "Channels" },
+  { path: "/channels", icon: "📡", label: "聊天平台" },
   { path: "/skills", icon: "🧩", label: "Skills" },
   { path: "/history", icon: "📋", label: "历史记录" },
 ];

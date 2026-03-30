@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { UpdateChecker } from "../components/UpdateChecker";
 import { useConfig } from "../hooks/useConfig";
 import { useGatewayConnection } from "../hooks/GatewayContext";
 import { useTheme } from "../hooks/useTheme";
 import { showToast } from "../components/Toast";
+import { UpdateChecker } from "../components/UpdateChecker";
 import {
   BUILTIN_MODEL_PROVIDERS,
   CUSTOM_MODEL_PROVIDER,
@@ -30,6 +30,8 @@ interface ChannelDef {
   description: string;
   fields: ChannelFieldDef[];
   tutorialUrl?: string;
+  /** Short numbered setup steps shown in the card (e.g. WeChat has no platform signup URL). */
+  quickSteps?: string[];
   experimental?: boolean;
   experimentalNote?: string;
 }
@@ -61,23 +63,32 @@ const CHANNEL_DEFS: ChannelDef[] = [
     id: "openclaw-weixin",
     name: "微信",
     icon: "\uD83D\uDCAC",
-    description: "微信 ClawBot 官方插件（扫码登录，无需公网）",
+    description: "微信 ClawBot 官方插件（扫码配对，无需公网 IP）",
     fields: [],
-    tutorialUrl: "https://weixin.qq.com",
     experimental: true,
     experimentalNote:
-      "微信 ClawBot 为腾讯官方插件，需 iOS 微信 8.0.70+。启用后请在 OpenClaw 控制台 (18789) 完成扫码配对。",
+      "微信 ClawBot 为腾讯官方插件，需 iOS 微信 8.0.70+（Android 逐步覆盖）。与飞书/QQ 不同，无需在网页填 AppId，配对在控制台完成。",
+    quickSteps: [
+      "在本页点击「启用」并保存。",
+      "浏览器打开 OpenClaw 控制台 http://localhost:18789（侧边栏「OpenClaw 高级模式」可直达）。",
+      "在控制台的频道管理中找到「微信 ClawBot」，用微信扫码完成配对。",
+      "配对后在微信里即可与 AI 对话。",
+    ],
   },
 ];
+
+type ChannelPluginsStatus = { qqbot: boolean; openclawWeixin: boolean } | null;
 
 interface ChannelCardProps {
   channel: ChannelDef;
   config: Record<string, unknown> | null;
   onSave: (channelId: string, values: Record<string, string>) => void;
   saving: boolean;
+  /** From /api/channel-plugins; null = still loading or unavailable */
+  channelPlugins: ChannelPluginsStatus;
 }
 
-function ChannelCard({ channel, config, onSave, saving }: ChannelCardProps) {
+function ChannelCard({ channel, config, onSave, saving, channelPlugins }: ChannelCardProps) {
   const channelCfg = (config?.channels as Record<string, Record<string, unknown>> | undefined)?.[
     channel.id
   ];
@@ -94,6 +105,11 @@ function ChannelCard({ channel, config, onSave, saving }: ChannelCardProps) {
     if (channel.fields.length === 0) return true;
     return channel.fields.some((f) => Boolean(fieldValues[f.key]?.trim()));
   })();
+
+  const pluginMissing =
+    channelPlugins &&
+    ((channel.id === "qqbot" && !channelPlugins.qqbot) ||
+      (channel.id === "openclaw-weixin" && !channelPlugins.openclawWeixin));
 
   const handleSave = () => {
     if (channel.fields.length === 0) {
@@ -136,6 +152,22 @@ function ChannelCard({ channel, config, onSave, saving }: ChannelCardProps) {
       {/* Description */}
       <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">{channel.description}</p>
 
+      {pluginMissing && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          <p className="font-medium">未检测到对应 npm 插件包，网关中不会出现该频道。</p>
+          <p className="mt-1">
+            请在本机进入<strong>便携包根目录</strong>（与 <code className="font-mono">system</code>、
+            <code className="font-mono">app</code> 同级），执行{" "}
+            <code className="rounded bg-red-100 px-1 dark:bg-red-900/60">system\setup.bat openclaw</code>{" "}
+            （Windows）或{" "}
+            <code className="rounded bg-red-100 px-1 dark:bg-red-900/60">bash system/setup.sh openclaw</code>{" "}
+            （macOS），以安装 <code className="font-mono">@tencent-weixin/openclaw-weixin</code> 等依赖；或进入{" "}
+            <code className="font-mono">app/core</code> 目录后运行{" "}
+            <code className="font-mono">npm install</code>。完成后<strong>重启</strong>便携版。
+          </p>
+        </div>
+      )}
+
       {/* First step guidance */}
       {channel.tutorialUrl && channel.fields.length > 0 && (
         <p className="mb-2 text-xs text-indigo-600">
@@ -155,6 +187,17 @@ function ChannelCard({ channel, config, onSave, saving }: ChannelCardProps) {
       {channel.experimentalNote && (
         <div className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
           {channel.experimentalNote}
+        </div>
+      )}
+
+      {channel.quickSteps && channel.quickSteps.length > 0 && (
+        <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900/40">
+          <p className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">接入步骤</p>
+          <ol className="list-decimal space-y-1.5 pl-4 text-xs text-gray-600 dark:text-gray-400">
+            {channel.quickSteps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
         </div>
       )}
 
@@ -238,6 +281,11 @@ interface ProviderCardState {
   validationStatus: ValidationStatus;
 }
 
+/** GET /api/config returns masked keys (`****` + last4). Treat as display-only, not for save/validate. */
+function isMaskedApiKeyEcho(value: string): boolean {
+  return value.startsWith("****");
+}
+
 const DOMESTIC_IDS = ["minimax", "deepseek", "kimi", "qwen", "glm", "doubao"];
 
 function isDomestic(id: string): boolean {
@@ -271,6 +319,7 @@ function ProviderCard({
 }: ProviderCardProps) {
   const [visible, setVisible] = useState(false);
   const { apiKey, saving, validationStatus } = cardState;
+  const maskedEcho = isMaskedApiKeyEcho(apiKey);
 
   const statusIndicator = (() => {
     if (validationStatus === "validating") {
@@ -387,14 +436,14 @@ function ProviderCard({
         </div>
         <button
           onClick={onValidate}
-          disabled={!apiKey || validationStatus === "validating"}
+          disabled={!apiKey || maskedEcho || validationStatus === "validating"}
           className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           验证
         </button>
         <button
           onClick={onSave}
-          disabled={!apiKey || saving}
+          disabled={!apiKey || maskedEcho || saving}
           className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
         >
           {saving ? "..." : "保存"}
@@ -464,10 +513,15 @@ function CustomProviderCard({
   const hasSavedKey = Boolean(custom.apiKey && custom.baseUrl);
   const state = getCardState("custom");
   const { apiKey, saving, validationStatus } = state;
+  const maskedEcho = isMaskedApiKeyEcho(apiKey);
 
   const handleSave = async () => {
     if (!apiKey.trim()) {
       showToast("请输入 API Key", "error");
+      return;
+    }
+    if (maskedEcho) {
+      showToast("当前为脱敏显示，请填入完整 API Key 后再保存", "error");
       return;
     }
     if (!baseUrl.trim() || !modelName.trim()) {
@@ -488,7 +542,7 @@ function CustomProviderCard({
       });
       sendRpc("secrets.reload", {});
       showToast("自定义接口已保存", "success");
-      patchCard("custom", { saving: false, apiKey: "", validationStatus: "idle" });
+      patchCard("custom", { saving: false, validationStatus: "idle" });
     } catch {
       showToast("保存失败", "error");
       patchCard("custom", { saving: false });
@@ -496,7 +550,7 @@ function CustomProviderCard({
   };
 
   const handleValidate = async () => {
-    if (!apiKey.trim()) return;
+    if (!apiKey.trim() || isMaskedApiKeyEcho(apiKey)) return;
     patchCard("custom", { validationStatus: "validating" });
     try {
       const res = await fetch("/api/validate-key", {
@@ -675,7 +729,7 @@ function CustomProviderCard({
         <button
           type="button"
           onClick={() => void handleValidate()}
-          disabled={!apiKey || validationStatus === "validating"}
+          disabled={!apiKey || maskedEcho || validationStatus === "validating"}
           className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           验证
@@ -683,7 +737,7 @@ function CustomProviderCard({
         <button
           type="button"
           onClick={() => void handleSave()}
-          disabled={!apiKey || saving}
+          disabled={!apiKey || maskedEcho || saving}
           className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
         >
           {saving ? "..." : "保存"}
@@ -769,6 +823,26 @@ export function Settings() {
   const { sendRpc } = useGatewayConnection();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<SettingsTab>("apikeys");
+  const [channelPlugins, setChannelPlugins] = useState<ChannelPluginsStatus>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/channel-plugins")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { qqbot?: boolean; openclawWeixin?: boolean } | null) => {
+        if (cancelled || !data || typeof data.qqbot !== "boolean") return;
+        setChannelPlugins({
+          qqbot: data.qqbot,
+          openclawWeixin: Boolean(data.openclawWeixin),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setChannelPlugins(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Per-provider local state: keyed by provider.id
   const [cardStates, setCardStates] = useState<Record<string, ProviderCardState>>({});
@@ -788,6 +862,34 @@ export function Settings() {
     },
     [getCardState],
   );
+
+  // Echo masked apiKey from GET /api/config into inputs (server never returns plaintext).
+  useEffect(() => {
+    if (!config) return;
+    setCardStates((prev) => {
+      const next = { ...prev };
+      const seed = (id: string, key: unknown) => {
+        if (typeof key !== "string" || !key) return;
+        const prevEntry = next[id];
+        next[id] = {
+          apiKey: key,
+          saving: prevEntry?.saving ?? false,
+          validationStatus: prevEntry?.validationStatus ?? "idle",
+        };
+      };
+      for (const p of BUILTIN_MODEL_PROVIDERS) {
+        const block = config[p.id as keyof OpenClawConfig];
+        const apiKey =
+          block && typeof block === "object" && block !== null
+            ? (block as { apiKey?: string }).apiKey
+            : undefined;
+        seed(p.id, apiKey);
+      }
+      const customBlock = config.custom as Record<string, unknown> | undefined;
+      seed("custom", customBlock?.apiKey);
+      return next;
+    });
+  }, [config]);
 
   /* Determine which provider the current model belongs to */
   const activeModel = config?.agent?.model ?? "";
@@ -809,7 +911,7 @@ export function Settings() {
   const handleSave = useCallback(
     async (provider: ModelProvider) => {
       const state = getCardState(provider.id);
-      if (!state.apiKey) return;
+      if (!state.apiKey || isMaskedApiKeyEcho(state.apiKey)) return;
       patchCard(provider.id, { saving: true });
       try {
         await updateConfig({
@@ -817,7 +919,7 @@ export function Settings() {
         });
         sendRpc("secrets.reload", {});
         showToast(`${provider.name} API Key 已保存`, "success");
-        patchCard(provider.id, { saving: false, apiKey: "", validationStatus: "idle" });
+        patchCard(provider.id, { saving: false, validationStatus: "idle" });
       } catch {
         showToast("保存失败", "error");
         patchCard(provider.id, { saving: false });
@@ -829,7 +931,7 @@ export function Settings() {
   const handleValidate = useCallback(
     async (provider: ModelProvider) => {
       const state = getCardState(provider.id);
-      if (!state.apiKey) return;
+      if (!state.apiKey || isMaskedApiKeyEcho(state.apiKey)) return;
       patchCard(provider.id, { validationStatus: "validating" });
       try {
         const modelPrefix = provider.models[0]?.split("/")[0] ?? "";
@@ -1044,6 +1146,7 @@ export function Settings() {
                       config={config as Record<string, unknown> | null}
                       onSave={(channelId, values) => void handleChannelSave(channelId, values)}
                       saving={channelSaving}
+                      channelPlugins={channelPlugins}
                     />
                   ))}
                 </div>
@@ -1082,7 +1185,7 @@ export function Settings() {
                   <ProxyInput config={config} updateConfig={updateConfig} />
                 </div>
 
-                {/* Update */}
+                {/* Update (version check + manual update; in-app zip install button removed) */}
                 <UpdateChecker />
 
                 {/* About */}
@@ -1093,7 +1196,7 @@ export function Settings() {
                     <p>基于 OpenClaw (MIT) 构建</p>
                     <div className="pt-2">
                       <a
-                        href="mailto:ausdina@proton.me"
+                        href="mailto:omochi6666@gmail.com"
                         className="text-indigo-600 hover:underline"
                       >
                         反馈建议

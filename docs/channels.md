@@ -1,8 +1,23 @@
-# 飞书 / QQ 机器人配置指南
+# 飞书 / QQ / 微信 聊天平台配置指南
 
-OpenClawU盘便携版支持将 AI 接入飞书和 QQ，让你在聊天软件中直接使用 AI。
+OpenClawU盘便携版支持将 AI 接入飞书、QQ 与微信（ClawBot），让你在聊天软件中直接使用 AI。
 
-两者都使用 **WebSocket 长连接**，不需要公网 IP、域名或服务器。U 盘插在任何能上网的电脑上就能用。
+飞书与 QQ 使用 **WebSocket 长连接**，不需要公网 IP、域名或服务器。U 盘插在任何能上网的电脑上就能用。
+
+微信通过 **腾讯官方 ClawBot 插件** 配对：在设置里启用后，到 OpenClaw 控制台扫码即可，同样不需要公网 IP 或自建回调地址。
+
+### QQ / 微信：需要先安装 npm 插件
+
+飞书能力已内置在 OpenClaw 主包中。**QQ 与微信**依赖额外的 npm 包，且必须与 OpenClaw 安装在**同一目录** `app/core/node_modules`（便携包根目录下，与 `system` 同级）下，以便解析 `openclaw/plugin-sdk`：
+
+- `@tencent-connect/openclaw-qqbot`
+- `@tencent-weixin/openclaw-weixin`
+
+**官方发行包**与 **完整 setup** 会自动安装上述依赖。若你只装了 `openclaw`，聊天平台页和网关里会**看不到** QQ/微信频道 — 请在便携包根目录打开 `system`，执行 `setup.bat openclaw`（Windows）或 `setup.sh openclaw`（macOS），或进入 `app/core` 执行 `npm install` 后**重启**便携版。
+
+Windows 上若腾讯插件的 `postinstall` 在 cmd 下失败，`setup.bat` 会自动改用 `npm install --ignore-scripts`；也可手动执行该命令。
+
+设置页「频道接入」在检测到缺少插件时会显示红色提示。
 
 ---
 

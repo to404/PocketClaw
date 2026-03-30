@@ -32,8 +32,115 @@ const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "no-referrer",
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:* https://api.github.com https://pocketclawaus.oss-cn-shanghai.aliyuncs.com; font-src 'self'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*; font-src 'self'",
 };
+
+// Weixin login session state for onboarding QR flow.
+const weixinLoginSession = {
+  proc: null,
+  startedAt: 0,
+  qrUrl: "",
+  qrAsciiLines: [],
+  collectingQrAscii: false,
+  logs: [],
+  exitCode: null,
+  error: null,
+  configuredHint: false,
+};
+
+function getOpenClawHomeDir() {
+  return path.join(DATA_DIR, ".openclaw");
+}
+
+function getWeixinAccountsDir() {
+  return path.join(getOpenClawHomeDir(), ".openclaw", "openclaw-weixin", "accounts");
+}
+
+function getWeixinAccountCount() {
+  // Source 1 (legacy): account files on disk.
+  let count = 0;
+  const dir = getWeixinAccountsDir();
+  if (fs.existsSync(dir)) {
+    try {
+      const files = fs.readdirSync(dir);
+      count = files.filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json")).length;
+    } catch {
+      count = 0;
+    }
+  }
+  if (count > 0) return count;
+
+  // Source 2 (current plugin behavior): accounts written into internal openclaw.json.
+  try {
+    const internalPath = path.join(getOpenClawHomeDir(), ".openclaw", "openclaw.json");
+    const internal = JSON.parse(fs.readFileSync(internalPath, "utf-8"));
+    const accounts = internal?.channels?.["openclaw-weixin"]?.accounts;
+    if (accounts && typeof accounts === "object" && !Array.isArray(accounts)) {
+      return Object.keys(accounts).length;
+    }
+  } catch {
+    // ignore parse/read errors and fallback to 0
+  }
+  return 0;
+}
+
+function isWeixinConfigured() {
+  return getWeixinAccountCount() > 0;
+}
+
+function pushWeixinLoginLog(line) {
+  if (!line) return;
+  weixinLoginSession.logs.push(line.trim());
+  if (weixinLoginSession.logs.length > 80) {
+    weixinLoginSession.logs.splice(0, weixinLoginSession.logs.length - 80);
+  }
+  // Capture terminal QR block so frontend can echo it directly.
+  if (/^[\s█▄▀]+$/.test(line) && (line.includes("█") || line.includes("▄") || line.includes("▀"))) {
+    weixinLoginSession.collectingQrAscii = true;
+    weixinLoginSession.qrAsciiLines.push(line);
+    if (weixinLoginSession.qrAsciiLines.length > 60) {
+      weixinLoginSession.qrAsciiLines.splice(0, weixinLoginSession.qrAsciiLines.length - 60);
+    }
+  } else if (weixinLoginSession.collectingQrAscii && line.trim() === "") {
+    weixinLoginSession.collectingQrAscii = false;
+  }
+  // Prefer plugin's explicit "二维码链接: <url>" output.
+  // IMPORTANT: always overwrite so QR refresh gets reflected in UI.
+  const explicit = line.match(/二维码链接[:：]\s*(\S+)/);
+  if (explicit && explicit[1]) {
+    weixinLoginSession.qrUrl = explicit[1].trim();
+    return;
+  }
+  // Success hint from plugin output, used to stop re-acquiring QR immediately.
+  if (/绑定成功|已绑定|登录成功|扫码成功/i.test(line)) {
+    weixinLoginSession.configuredHint = true;
+  }
+  // Fallback: first URL in output.
+  if (!weixinLoginSession.qrUrl) {
+    const generic = line.match(/https?:\/\/\S+/);
+    if (generic && generic[0]) {
+      weixinLoginSession.qrUrl = generic[0].trim();
+    }
+  }
+}
+
+function getWeixinLoginStatusPayload() {
+  const running = Boolean(weixinLoginSession.proc && !weixinLoginSession.proc.killed);
+  const configured = isWeixinConfigured() || weixinLoginSession.configuredHint;
+  return {
+    running,
+    configured,
+    accountCount: getWeixinAccountCount(),
+    qrUrl: weixinLoginSession.qrUrl || null,
+    qrAscii: weixinLoginSession.qrAsciiLines.length > 0
+      ? weixinLoginSession.qrAsciiLines.slice(-40)
+      : null,
+    startedAt: weixinLoginSession.startedAt || null,
+    exitCode: weixinLoginSession.exitCode,
+    error: weixinLoginSession.error,
+    logs: weixinLoginSession.logs.slice(-20),
+  };
+}
 
 const SHARED_CONFIG = JSON.parse(
   fs.readFileSync(path.join(SCRIPT_DIR, "shared-config.json"), "utf-8"),
@@ -306,11 +413,44 @@ function syncInternalConfig(config, { updateModel = false } = {}) {
 
   // Pass channels config if any channel plugins are found.
   const hasPlugins = pluginPaths.length > 0;
+  // OpenClaw treats `channels` as the full channel set when present. Replacing it with only
+  // plugin keys (e.g. openclaw-weixin) hides bundled adapters like feishu. Merge with any
+  // existing internal.channels and stub missing bundled entries so the gateway still lists them.
+  const CHANNEL_STUB_DEFAULTS = {
+    feishu: { enabled: false },
+  };
   if (hasPlugins && config.channels && typeof config.channels === "object") {
-    const channels = { ...config.channels };
-    // Auto-enable WeChat if the plugin is installed but user hasn't configured it
+    const prev =
+      internal.channels && typeof internal.channels === "object" && !Array.isArray(internal.channels)
+        ? { ...internal.channels }
+        : {};
+    const channels = { ...prev };
+    for (const [id, incomingRaw] of Object.entries(config.channels)) {
+      const incoming =
+        incomingRaw && typeof incomingRaw === "object" && !Array.isArray(incomingRaw)
+          ? incomingRaw
+          : null;
+      const existing = channels[id];
+      // Preserve runtime-populated channel fields (e.g. openclaw-weixin.accounts)
+      // when user config only updates shallow flags like enabled.
+      if (
+        incoming &&
+        existing &&
+        typeof existing === "object" &&
+        !Array.isArray(existing)
+      ) {
+        channels[id] = { ...existing, ...incoming };
+      } else {
+        channels[id] = incomingRaw;
+      }
+    }
+    for (const [id, stub] of Object.entries(CHANNEL_STUB_DEFAULTS)) {
+      if (channels[id] === undefined) {
+        channels[id] = stub;
+      }
+    }
     const hasWeixinPlugin = pluginPaths.some((p) => String(p).includes("openclaw-weixin"));
-    if (hasWeixinPlugin && !channels["openclaw-weixin"]) {
+    if (hasWeixinPlugin && channels["openclaw-weixin"] === undefined) {
       channels["openclaw-weixin"] = { enabled: true };
     }
     internal.channels = channels;
@@ -462,256 +602,6 @@ function handleApiOpenclawVersion(res) {
 }
 
 // ---------------------------------------------------------------------------
-// One-click update: /api/update (POST) + /api/update/status (GET)
-// ---------------------------------------------------------------------------
-
-let updateState = { status: "idle", progress: 0, error: null, version: null };
-
-/** Check latest version from GitHub API, download from Aliyun OSS (China CDN). */
-function fetchLatestRelease() {
-  const https = require("https");
-
-  const OSS_BASE = "https://pocketclawaus.oss-cn-shanghai.aliyuncs.com";
-
-  const sources = [
-    {
-      name: "GitHub",
-      url: "https://api.github.com/repos/Austin5925/PocketClaw/releases/latest",
-      headers: { "User-Agent": "OpenClawUSB-Portable", Accept: "application/vnd.github.v3+json" },
-      parseVersion: (data) => data.tag_name?.replace(/^v/, ""),
-      buildDownloadUrl: (ver) => `${OSS_BASE}/v${ver}/PocketClaw-v${ver}-update.zip`,
-    },
-  ];
-
-  return new Promise((resolve, reject) => {
-    let idx = 0;
-    const tryNext = () => {
-      if (idx >= sources.length) {
-        reject(new Error("无法获取最新版本，请检查网络"));
-        return;
-      }
-      const src = sources[idx++];
-      https.get(src.url, { headers: src.headers, timeout: 8000 }, (res) => {
-        let body = "";
-        res.on("data", (c) => { body += c; });
-        res.on("end", () => {
-          try {
-            const data = JSON.parse(body);
-            const ver = src.parseVersion(data);
-            if (ver) {
-              resolve({ version: ver, downloadUrl: src.buildDownloadUrl(ver), source: src.name });
-            } else {
-              tryNext();
-            }
-          } catch { tryNext(); }
-        });
-      }).on("error", () => tryNext())
-        .on("timeout", function() { this.destroy(); tryNext(); });
-    };
-    tryNext();
-  });
-}
-
-async function startUpdate() {
-  const https = require("https");
-  const { execSync } = require("child_process");
-
-  try {
-    updateState = { status: "checking", progress: 5, error: null, version: null };
-
-    // 1. Get latest version from GitHub API, download from Aliyun OSS
-    const release = await fetchLatestRelease();
-    const latestVersion = release.version;
-    if (!latestVersion) throw new Error("无法获取最新版本信息");
-
-    // Check current version
-    const currentVersion = fs
-      .readFileSync(path.join(BASE_DIR, "version.txt"), "utf-8")
-      .trim();
-    if (currentVersion === latestVersion) {
-      updateState = { status: "idle", progress: 0, error: null, version: null };
-      return { alreadyUpToDate: true };
-    }
-
-    updateState = {
-      status: "downloading",
-      progress: 20,
-      error: null,
-      version: latestVersion,
-    };
-
-    // 2. Download update zip (using the URL from whichever source responded)
-    const updateUrl = release.downloadUrl;
-    const tmpFile = path.join(
-      require("os").tmpdir(),
-      `pocketclaw-update-${latestVersion}.zip`,
-    );
-
-    // Download with redirect following, retry, and overall timeout
-    const downloadWithRetry = (url, dest, retries = 3) => {
-      return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const overallTimeout = setTimeout(() => {
-          reject(new Error("下载超时（5 分钟），请检查网络后重试"));
-        }, 5 * 60000);
-
-        const attempt = (currentUrl) => {
-          attempts++;
-          const proto = currentUrl.startsWith("http://") ? require("http") : https;
-          const req = proto.get(
-            currentUrl,
-            { headers: { "User-Agent": "OpenClawUSB-Portable" }, timeout: 30000 },
-            (res) => {
-              // Follow redirects (GitHub → CDN)
-              if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                res.resume(); // MUST drain redirect response to free the connection
-                attempt(res.headers.location);
-                return;
-              }
-              if (res.statusCode !== 200) {
-                res.resume();
-                const err = new Error(`下载失败: HTTP ${res.statusCode}`);
-                if (attempts < retries) {
-                  updateState.progress = 20;
-                  setTimeout(() => attempt(url), 3000);
-                } else {
-                  clearTimeout(overallTimeout);
-                  reject(err);
-                }
-                return;
-              }
-              const file = fs.createWriteStream(dest);
-              res.pipe(file);
-              file.on("finish", () => { file.close(); clearTimeout(overallTimeout); resolve(); });
-              file.on("error", (e) => { clearTimeout(overallTimeout); reject(e); });
-            },
-          );
-          req.on("error", (e) => {
-            if (attempts < retries) {
-              updateState.progress = 20;
-              setTimeout(() => attempt(url), 3000);
-            } else {
-              clearTimeout(overallTimeout);
-              reject(new Error(`下载失败（${attempts} 次尝试）: ${e.message}`));
-            }
-          });
-          req.on("timeout", () => {
-            req.destroy();
-            if (attempts < retries) {
-              setTimeout(() => attempt(url), 2000);
-            } else {
-              clearTimeout(overallTimeout);
-              reject(new Error("下载连接超时，请检查网络"));
-            }
-          });
-        };
-        attempt(url);
-      });
-    };
-
-    await downloadWithRetry(updateUrl, tmpFile);
-
-    updateState.status = "backing_up";
-    updateState.progress = 50;
-
-    // 3. Backup
-    const backupDir = path.join(DATA_DIR, "backups");
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .slice(0, 19);
-    const backupPath = path.join(
-      backupDir,
-      `app-${currentVersion}-${timestamp}`,
-    );
-    fs.mkdirSync(backupPath, { recursive: true });
-    // Simple backup: copy version.txt
-    fs.copyFileSync(
-      path.join(BASE_DIR, "version.txt"),
-      path.join(backupPath, "version.txt"),
-    );
-
-    updateState.status = "extracting";
-    updateState.progress = 70;
-
-    // 4. Extract — timeout 5 min (140MB zip to USB is slow, PowerShell Expand-Archive is sluggish)
-    if (process.platform === "win32") {
-      execSync(
-        `powershell -Command "Expand-Archive -Path '${tmpFile}' -DestinationPath '${BASE_DIR}' -Force"`,
-        { timeout: 300000 },
-      );
-    } else {
-      execSync(`unzip -qo "${tmpFile}" -d "${BASE_DIR}"`, { timeout: 300000 });
-    }
-
-    // 5. Update version.txt
-    fs.writeFileSync(path.join(BASE_DIR, "version.txt"), latestVersion);
-
-    // 6. Run migrate.js if exists
-    updateState.status = "migrating";
-    updateState.progress = 90;
-    const migrateScript = path.join(SCRIPT_DIR, "migrate.js");
-    if (fs.existsSync(migrateScript)) {
-      try {
-        execSync(`"${process.execPath}" "${migrateScript}" "${BASE_DIR}"`, {
-          timeout: 30000,
-        });
-      } catch {
-        /* migration warnings ok */
-      }
-    }
-
-    // Cleanup
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch {
-      /* ok */
-    }
-
-    updateState = {
-      status: "complete",
-      progress: 100,
-      error: null,
-      version: latestVersion,
-    };
-    return { success: true, version: latestVersion };
-  } catch (err) {
-    updateState = {
-      status: "error",
-      progress: 0,
-      error: err.message || "更新失败",
-      version: null,
-    };
-    throw err;
-  }
-}
-
-function handleApiUpdate(req, res) {
-  if (req.method !== "POST") {
-    res.writeHead(405, SECURITY_HEADERS);
-    res.end();
-    return;
-  }
-
-  if (updateState.status !== "idle" && updateState.status !== "error" && updateState.status !== "complete") {
-    jsonResponse(res, 409, { error: "更新正在进行中" });
-    return;
-  }
-
-  startUpdate()
-    .then((result) => {
-      jsonResponse(res, 200, result);
-    })
-    .catch((err) => {
-      jsonResponse(res, 500, { error: err.message || "更新失败" });
-    });
-}
-
-function handleApiUpdateStatus(res) {
-  jsonResponse(res, 200, updateState);
-}
-
-// ---------------------------------------------------------------------------
 // OpenClaw kernel version check: /api/openclaw-check (GET)
 // Portable runtime has no npm — OpenClaw updates ship with OpenClawU盘便携版 releases
 // release packages. This endpoint only CHECKS for updates (no install).
@@ -745,6 +635,18 @@ function handleApiOpenclawCheck(res) {
   req.on("timeout", () => { req.destroy(); });
 }
 
+/** Whether optional channel npm packages are present next to openclaw (same node_modules). */
+function handleApiChannelPlugins(res) {
+  const coreNm = path.join(BASE_DIR, "app", "core", "node_modules");
+  const qqbot = fs.existsSync(
+    path.join(coreNm, "@tencent-connect", "openclaw-qqbot", "package.json"),
+  );
+  const openclawWeixin = fs.existsSync(
+    path.join(coreNm, "@tencent-weixin", "openclaw-weixin", "package.json"),
+  );
+  jsonResponse(res, 200, { qqbot, openclawWeixin });
+}
+
 function handleApiHealth(res) {
   const gatewayUrl = `http://${GATEWAY_HOST}:${GATEWAY_PORT}/health`;
   const reqLib = require("http");
@@ -764,6 +666,198 @@ function handleApiHealth(res) {
     .on("error", () => {
       jsonResponse(res, 200, { ui: "ok", gateway: "unreachable" });
     });
+}
+
+function handleApiWeixinLoginStatus(req, res) {
+  if (req.method !== "GET") {
+    res.writeHead(405, SECURITY_HEADERS);
+    res.end();
+    return;
+  }
+  jsonResponse(res, 200, getWeixinLoginStatusPayload());
+}
+
+function proxyRemoteImage(urlStr, res, redirectsLeft = 3) {
+  let target;
+  try {
+    target = new URL(urlStr);
+  } catch {
+    res.writeHead(400, SECURITY_HEADERS);
+    res.end("Bad QR URL");
+    return;
+  }
+
+  const lib = target.protocol === "http:" ? require("http") : require("https");
+  const req = lib.request(
+    {
+      hostname: target.hostname,
+      port: target.port || (target.protocol === "http:" ? 80 : 443),
+      path: `${target.pathname}${target.search || ""}`,
+      method: "GET",
+      headers: {
+        "User-Agent": "PocketClaw/1.0",
+        Accept: "image/*,*/*;q=0.8",
+      },
+      timeout: 10000,
+    },
+    (upstream) => {
+      const code = upstream.statusCode || 500;
+      const location = upstream.headers.location;
+      if (
+        redirectsLeft > 0 &&
+        (code === 301 || code === 302 || code === 303 || code === 307 || code === 308) &&
+        location
+      ) {
+        const nextUrl = new URL(location, target).toString();
+        upstream.resume();
+        proxyRemoteImage(nextUrl, res, redirectsLeft - 1);
+        return;
+      }
+
+      if (code < 200 || code >= 300) {
+        upstream.resume();
+        res.writeHead(502, SECURITY_HEADERS);
+        res.end("QR upstream unavailable");
+        return;
+      }
+
+      const contentType = String(upstream.headers["content-type"] || "image/png");
+      res.writeHead(200, {
+        "Content-Type": contentType,
+        "Cache-Control": "no-store",
+        ...SECURITY_HEADERS,
+      });
+      upstream.pipe(res);
+    },
+  );
+  req.on("error", () => {
+    if (!res.headersSent) {
+      res.writeHead(502, SECURITY_HEADERS);
+      res.end("QR fetch failed");
+    }
+  });
+  req.on("timeout", () => {
+    req.destroy();
+    if (!res.headersSent) {
+      res.writeHead(504, SECURITY_HEADERS);
+      res.end("QR fetch timeout");
+    }
+  });
+  req.end();
+}
+
+function handleApiWeixinLoginQrcode(req, res) {
+  if (req.method !== "GET") {
+    res.writeHead(405, SECURITY_HEADERS);
+    res.end();
+    return;
+  }
+  const qrUrl = (weixinLoginSession.qrUrl || "").trim();
+  if (!qrUrl) {
+    res.writeHead(404, SECURITY_HEADERS);
+    res.end("QR not ready");
+    return;
+  }
+  proxyRemoteImage(qrUrl, res);
+}
+
+function handleApiWeixinLoginStart(req, res) {
+  if (req.method !== "POST") {
+    res.writeHead(405, SECURITY_HEADERS);
+    res.end();
+    return;
+  }
+
+  readBody(req, res, (body) => {
+    let force = false;
+    try {
+      const parsed = body ? JSON.parse(body) : {};
+      force = Boolean(parsed.force);
+    } catch {
+      force = false;
+    }
+
+    // If already configured, return immediately unless force requested.
+    if (!force && isWeixinConfigured()) {
+      jsonResponse(res, 200, getWeixinLoginStatusPayload());
+      return;
+    }
+
+    // If a login command is already running: return current state unless force requested.
+    if (weixinLoginSession.proc && !weixinLoginSession.proc.killed) {
+      if (!force) {
+        jsonResponse(res, 200, getWeixinLoginStatusPayload());
+        return;
+      }
+      try { weixinLoginSession.proc.kill(); } catch { /* ignore */ }
+      weixinLoginSession.proc = null;
+    }
+
+    const { spawn } = require("child_process");
+    const openclawEntry = findOpenClawEntry();
+    if (!openclawEntry) {
+      jsonResponse(res, 500, { error: "OpenClaw entry not found" });
+      return;
+    }
+
+    weixinLoginSession.proc = null;
+    weixinLoginSession.startedAt = Date.now();
+    weixinLoginSession.qrUrl = "";
+    weixinLoginSession.qrAsciiLines = [];
+    weixinLoginSession.collectingQrAscii = false;
+    weixinLoginSession.logs = [];
+    weixinLoginSession.exitCode = null;
+    weixinLoginSession.error = null;
+    weixinLoginSession.configuredHint = false;
+
+    const child = spawn(
+      process.execPath,
+      [openclawEntry, "channels", "login", "--channel", "openclaw-weixin"],
+      {
+        cwd: BASE_DIR,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          OPENCLAW_HOME: getOpenClawHomeDir(),
+        },
+      },
+    );
+    weixinLoginSession.proc = child;
+
+    child.stdout.on("data", (chunk) => {
+      const text = String(chunk || "");
+      for (const line of text.split(/\r?\n/)) {
+        const t = line.trim();
+        if (t) pushWeixinLoginLog(t);
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      const text = String(chunk || "");
+      for (const line of text.split(/\r?\n/)) {
+        const t = line.trim();
+        if (t) pushWeixinLoginLog(t);
+      }
+    });
+    child.on("error", (err) => {
+      weixinLoginSession.error = String(err?.message || err || "failed to start weixin login");
+    });
+    child.on("exit", (code) => {
+      weixinLoginSession.exitCode = code;
+      if (code === 0) {
+        // openclaw channels login succeeded; config persistence may lag briefly.
+        weixinLoginSession.configuredHint = true;
+      }
+      if (code !== 0 && !isWeixinConfigured()) {
+        weixinLoginSession.error = weixinLoginSession.error || `weixin login exited with code ${code}`;
+      }
+      weixinLoginSession.proc = null;
+    });
+
+    // Return quickly so frontend can start polling.
+    setTimeout(() => {
+      jsonResponse(res, 200, getWeixinLoginStatusPayload());
+    }, 200);
+  });
 }
 
 // Loaded from shared-config.json (single source of truth for providers).
@@ -998,10 +1092,11 @@ const server = http.createServer((req, res) => {
   if (pathname === "/api/version") return handleApiVersion(res);
   if (pathname === "/api/openclaw-version") return handleApiOpenclawVersion(res);
   if (pathname === "/api/health") return handleApiHealth(res);
-  if (pathname === "/api/update" && req.method === "POST")
-    return handleApiUpdate(req, res);
-  if (pathname === "/api/update/status") return handleApiUpdateStatus(res);
+  if (pathname === "/api/channel-plugins") return handleApiChannelPlugins(res);
   if (pathname === "/api/openclaw-check") return handleApiOpenclawCheck(res);
+  if (pathname === "/api/weixin-login/start") return handleApiWeixinLoginStart(req, res);
+  if (pathname === "/api/weixin-login/status") return handleApiWeixinLoginStatus(req, res);
+  if (pathname === "/api/weixin-login/qrcode") return handleApiWeixinLoginQrcode(req, res);
 
   const filePath = path.join(UI_DIR, pathname === "/" ? "index.html" : pathname);
   if (serveStatic(res, filePath)) return;
@@ -1099,7 +1194,7 @@ if (process.argv.includes("--supervisor")) {
     supervisorExit(1);
   }
 
-  // Apply proxy from user config (Settings -> 关于与更新 Tab)
+  // Apply proxy from user config (Settings)
   if (config.proxy?.httpsProxy) {
     process.env.HTTPS_PROXY = config.proxy.httpsProxy;
     process.env.HTTP_PROXY = config.proxy.httpsProxy;

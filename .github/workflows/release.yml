@@ -192,15 +192,7 @@ jobs:
             -x "data/.openclaw/credentials/*" \
             -x "data/memory/*.md" \
             -x "data/backups/*" \
-            -x "system/setup.bat" \
-            -x "system/update.bat"
-
-      - name: Create update package
-        run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          cd portable
-          zip -r "../PocketClaw-v${VERSION}-update.zip" \
-            app/ui/ app/core/ dist/control-ui/ system/ version.txt
+            -x "system/setup.bat"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -343,8 +335,7 @@ jobs:
             -x!data/.openclaw/credentials \
             -x!data/memory/*.md \
             -x!data/backups/* \
-            -x!system/setup.sh \
-            -x!system/update.sh
+            -x!system/setup.sh
 
       - uses: actions/upload-artifact@v4
         with:

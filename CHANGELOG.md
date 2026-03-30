@@ -217,7 +217,7 @@ All notable changes to this project will be documented in this file.
 - **WS 重连过早放弃**: maxReconnectAttempts 从 5 提升到 20（~5 分钟）
 - **Settings 返回按钮**: 指向不存在的 /dashboard 路由，改为 /
 - **Dashboard hasApiKey**: 未经过 getProviderConfigKey 映射，导致 Kimi/GLM 等 provider 误判
-- **关于页面链接**: 移除 GitHub 链接，反馈改为 mailto:ausdina@proton.me
+- **关于页面链接**: 移除 GitHub 链接，反馈改为 mailto:omochi6666@gmail.com
 
 ### Changed
 

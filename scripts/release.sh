@@ -12,9 +12,8 @@ log() { echo "[Release] $*"; }
 log "=== OpenClawU盘便携版 Release v${VERSION} ==="
 
 FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.tar.gz"
-UPDATE_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-update.tar.gz"
 
-if [ ! -f "$FULL_PACKAGE" ] || [ ! -f "$UPDATE_PACKAGE" ]; then
+if [ ! -f "$FULL_PACKAGE" ]; then
     log "Build artifacts not found, building first..."
     bash "$SCRIPT_DIR/build-portable.sh"
 fi
@@ -28,10 +27,9 @@ else
 fi
 
 log "=== Release artifacts ready ==="
-log "Full:   $FULL_PACKAGE"
-log "Update: $UPDATE_PACKAGE"
+log "Full: $FULL_PACKAGE"
 log ""
 log "To publish:"
 log "  1. git push origin v${VERSION}"
 log "  2. GitHub Actions will create the release automatically"
-log "  3. Or manually: gh release create v${VERSION} $FULL_PACKAGE $UPDATE_PACKAGE"
+log "  3. Or manually: gh release create v${VERSION} $FULL_PACKAGE"

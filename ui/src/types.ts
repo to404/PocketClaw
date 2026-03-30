@@ -53,10 +53,9 @@ export interface GatewayStatus {
   error?: string;
 }
 
+/** Local version display only (no online “update available” check). */
 export interface VersionInfo {
   current: string;
-  latest?: string;
-  updateAvailable: boolean;
   openclawVersion?: string;
 }
 

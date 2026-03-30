@@ -7,7 +7,7 @@ set "BASE_DIR=%SCRIPT_DIR%..\"
 set "RUNTIME_DIR=%BASE_DIR%app\runtime"
 set "CORE_DIR=%BASE_DIR%app\core"
 set "NODE_VERSION=22.22.1"
-set "OPENCLAW_VERSION=2026.3.22"
+set "OPENCLAW_VERSION=2026.3.28"
 set "NODE_SHA256=877cb93829e14fffbbc7903e7d8037336c9a79f3ea43c5d0b8c2379b79da56de"
 
 echo [OpenClawU盘便携版] === OpenClawU盘便携版 Setup ===
@@ -72,16 +72,25 @@ if not exist "%NODE_BIN%" (
     exit /b 1
 )
 
-echo [OpenClawU盘便携版] Installing OpenClaw v%OPENCLAW_VERSION%...
+echo [OpenClawU盘便携版] Installing OpenClaw v%OPENCLAW_VERSION% + QQ/WeChat channel plugins...
 mkdir "%CORE_DIR%" 2>nul
 
-"%NODE_BIN%" "%NPM_BIN%" install --prefix "%CORE_DIR%" "openclaw@%OPENCLAW_VERSION%"
+pushd "%CORE_DIR%"
+"%NODE_BIN%" "%NPM_BIN%" install
 if errorlevel 1 (
-    echo [ERROR] Failed to install OpenClaw
-    exit /b 1
+    echo [OpenClawU盘便携版] Retrying npm install with --ignore-scripts ^(QQ/WeChat plugin postinstall may fail on cmd^)...
+    "%NODE_BIN%" "%NPM_BIN%" install --ignore-scripts
+    if errorlevel 1 (
+        popd
+        echo [ERROR] Failed to install OpenClaw / channel plugins
+        exit /b 1
+    )
 )
+REM Plugins resolve host version from nearest package.json — align with openclaw
+"%NODE_BIN%" -e "const fs=require('fs'),path=require('path');const d=process.cwd();const pj=path.join(d,'package.json');const p=require(pj);try{p.version=require(path.join(d,'node_modules/openclaw/package.json')).version;fs.writeFileSync(pj,JSON.stringify(p,null,2));}catch(e){}"
+popd
 
-echo [OpenClawU盘便携版] OpenClaw installed successfully
+echo [OpenClawU盘便携版] OpenClaw and channel plugins installed successfully
 if not exist "%BASE_DIR%dist\control-ui\index.html" (
     echo [OpenClawU盘便携版] NOTE: Gateway Control UI ^(18789^) assets are missing. Official zips include them.
     echo [OpenClawU盘便携版]       From repo clone: install Git + pnpm, then run  setup.bat control-ui

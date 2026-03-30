@@ -7,7 +7,7 @@ RUNTIME_DIR="$BASE_DIR/app/runtime"
 CORE_DIR="$BASE_DIR/app/core"
 
 NODE_VERSION="22.22.1"
-OPENCLAW_VERSION="2026.3.22"
+OPENCLAW_VERSION="2026.3.28"
 # Chinese mirror (faster in mainland China), fall back to official
 NODE_MIRROR_URL="https://npmmirror.com/mirrors/node/v${NODE_VERSION}"
 NODE_OFFICIAL_URL="https://nodejs.org/dist/v${NODE_VERSION}"
@@ -120,9 +120,14 @@ install_openclaw() {
 
     log "Using Node.js: $("$node_bin" --version)"
 
-    "$node_bin" "$npm_bin" install --prefix "$CORE_DIR" "openclaw@${OPENCLAW_VERSION}"
+    (cd "$CORE_DIR" && "$node_bin" "$npm_bin" install) || error "npm install failed in app/core (openclaw + channel plugins)"
+    (
+        cd "$CORE_DIR" || exit 1
+        oc_ver=$("$node_bin" -p "require('./node_modules/openclaw/package.json').version")
+        "$node_bin" -e "const fs=require('fs'),p=require('./package.json');p.version=process.argv[1];fs.writeFileSync('package.json',JSON.stringify(p,null,2));" "$oc_ver"
+    )
 
-    log "OpenClaw installed successfully"
+    log "OpenClaw and channel plugins installed successfully"
     "$node_bin" "$npm_bin" list --prefix "$CORE_DIR" openclaw 2>/dev/null || true
 
     # Control UI (port 18789 web interface) is NOT included in the npm package.

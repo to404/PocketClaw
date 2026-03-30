@@ -499,11 +499,56 @@ func syncConfigToOpenClaw() {
 	}
 
 	// Pass channels config if any channel plugins are found.
+	// Same merge/stub rules as portable/system/server.js: a bare { openclaw-weixin } must not
+	// replace the whole channels map or bundled adapters disappear from the gateway.
+	channelStubDefaults := map[string]map[string]interface{}{
+		"feishu": {"enabled": false},
+	}
 	if len(pluginPaths) > 0 {
-		if channels, ok := ourConfig["channels"].(map[string]interface{}); ok && len(channels) > 0 {
-			internalConfig["channels"] = channels
+		if userCh, ok := ourConfig["channels"].(map[string]interface{}); ok && len(userCh) > 0 {
+			merged := make(map[string]interface{})
+			if prev, ok := internalConfig["channels"].(map[string]interface{}); ok {
+				for k, v := range prev {
+					merged[k] = v
+				}
+			}
+			for k, v := range userCh {
+				if incomingMap, ok := v.(map[string]interface{}); ok {
+					if existingMap, ok2 := merged[k].(map[string]interface{}); ok2 {
+						// Preserve runtime-populated channel fields (e.g. accounts) while
+						// still allowing user config to override shallow keys like enabled.
+						next := make(map[string]interface{}, len(existingMap)+len(incomingMap))
+						for ek, ev := range existingMap {
+							next[ek] = ev
+						}
+						for ik, iv := range incomingMap {
+							next[ik] = iv
+						}
+						merged[k] = next
+						continue
+					}
+				}
+				merged[k] = v
+			}
+			for id, stub := range channelStubDefaults {
+				if _, exists := merged[id]; !exists {
+					merged[id] = stub
+				}
+			}
+			hasWeixinPlugin := false
+			for _, p := range pluginPaths {
+				if s, ok := p.(string); ok && strings.Contains(s, "openclaw-weixin") {
+					hasWeixinPlugin = true
+					break
+				}
+			}
+			if hasWeixinPlugin {
+				if _, exists := merged["openclaw-weixin"]; !exists {
+					merged["openclaw-weixin"] = map[string]interface{}{"enabled": true}
+				}
+			}
+			internalConfig["channels"] = merged
 		}
-		// WeChat auto-enable is handled by server.js syncInternalConfig (not Go launcher)
 	} else {
 		delete(internalConfig, "channels")
 	}

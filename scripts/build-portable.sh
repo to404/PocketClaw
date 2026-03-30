@@ -55,7 +55,6 @@ log "Step 5: Packaging..."
 mkdir -p "$RELEASE_DIR"
 
 FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.zip"
-UPDATE_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-update.zip"
 
 log "Creating full package..."
 cd "$PROJECT_ROOT"
@@ -64,14 +63,5 @@ zip -r "$FULL_PACKAGE" portable/ \
     -x 'portable/data/memory/*.md' \
     -x 'portable/data/backups/*'
 
-log "Creating update package (app/ only)..."
-cd "$PORTABLE_DIR"
-zip -r "$UPDATE_PACKAGE" \
-    app/ui/ \
-    app/core/ \
-    system/ \
-    version.txt
-
 log "=== Build Complete ==="
-log "Full package:   $FULL_PACKAGE ($(du -h "$FULL_PACKAGE" | cut -f1))"
-log "Update package: $UPDATE_PACKAGE ($(du -h "$UPDATE_PACKAGE" | cut -f1))"
+log "Full package: $FULL_PACKAGE ($(du -h "$FULL_PACKAGE" | cut -f1))"

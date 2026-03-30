@@ -194,6 +194,13 @@ describe("Server API", () => {
     assert.equal(res.body.version, "1.0.0-test");
   });
 
+  it("GET /api/channel-plugins returns booleans for optional channel packages", async () => {
+    const res = await request(port, "GET", "/api/channel-plugins");
+    assert.equal(res.status, 200);
+    assert.equal(typeof res.body.qqbot, "boolean");
+    assert.equal(typeof res.body.openclawWeixin, "boolean");
+  });
+
   // ── /api/health ──
 
   it("GET /api/health returns ui=ok and gateway=unreachable", async () => {

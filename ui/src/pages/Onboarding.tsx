@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import QRCode from "qrcode";
 import { ModelSelector } from "../components/ModelSelector";
 import { ApiKeyInput } from "../components/ApiKeyInput";
 import { Logo } from "../components/Logo";
@@ -13,11 +14,23 @@ interface ChannelConfig {
   "openclaw-weixin"?: { enabled: boolean };
 }
 
+interface WeixinLoginStatus {
+  running: boolean;
+  configured: boolean;
+  accountCount: number;
+  qrUrl: string | null;
+  error: string | null;
+  exitCode: number | null;
+}
+
+const isWeixinBound = (st: WeixinLoginStatus | null) =>
+  Boolean(st && (st.configured || st.exitCode === 0));
+
 const TOTAL_STEPS = 4;
 
 export function Onboarding() {
   const navigate = useNavigate();
-  const { updateConfig } = useConfig();
+  const { config, updateConfig } = useConfig();
   const { sendRpc } = useGatewayConnection();
   const [step, setStep] = useState(1);
   const [model, setModel] = useState("minimax/MiniMax-M2.7");
@@ -29,12 +42,140 @@ export function Onboarding() {
   const [error, setError] = useState<string | null>(null);
 
   // Step 3 — channel config state
-  const [channels, setChannels] = useState<ChannelConfig>({});
-  const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
+  const [channels, setChannels] = useState<ChannelConfig>({
+    "openclaw-weixin": { enabled: true },
+  });
+  const [expandedChannel, setExpandedChannel] = useState<string | null>("openclaw-weixin");
+  const [weixinStatus, setWeixinStatus] = useState<WeixinLoginStatus | null>(null);
+  const [hydratedFromConfig, setHydratedFromConfig] = useState(false);
+  const [weixinAutoStarting, setWeixinAutoStarting] = useState(false);
+  const [weixinQrNonce, setWeixinQrNonce] = useState(0);
+  const [weixinQrLoadFailed, setWeixinQrLoadFailed] = useState(false);
+  const [weixinQrDataUrl, setWeixinQrDataUrl] = useState<string | null>(null);
+
+  const isMaskedApiKeyEcho = (value: string) => value.startsWith("****");
+
+  useEffect(() => {
+    if (!config || hydratedFromConfig) return;
+    const savedModel = config.agent?.model;
+    if (typeof savedModel === "string" && savedModel.trim()) {
+      setModel(savedModel);
+    }
+
+    const custom = (config.custom as Record<string, unknown> | undefined) ?? {};
+    const baseUrl = typeof custom.baseUrl === "string" ? custom.baseUrl : "";
+    const modelName = typeof custom.modelName === "string" ? custom.modelName : "";
+    const apiMode = custom.api === "anthropic-messages" ? "anthropic-messages" : "openai-completions";
+    const customKey = typeof custom.apiKey === "string" ? custom.apiKey : "";
+    // Always hydrate custom endpoint fields so switching back to "自定义" keeps prior values.
+    if (baseUrl) setCustomBaseUrl(baseUrl);
+    if (modelName) setCustomModelName(modelName);
+    setCustomApi(apiMode);
+
+    const isCustomModel = typeof savedModel === "string" && savedModel.startsWith("custom/");
+    if (isCustomModel) {
+      if (customKey) setApiKey(customKey);
+    } else if (typeof savedModel === "string" && savedModel) {
+      const cfgKey = getProviderConfigKey(savedModel);
+      const providerCfg = (config[cfgKey] as Record<string, unknown> | undefined) ?? {};
+      const key = typeof providerCfg.apiKey === "string" ? providerCfg.apiKey : "";
+      if (key) setApiKey(key);
+    }
+
+    setHydratedFromConfig(true);
+  }, [config, hydratedFromConfig]);
+
+  const triggerWeixinLogin = async (force: boolean) => {
+    setWeixinAutoStarting(true);
+    try {
+      const startRes = await fetch("/api/weixin-login/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      if (startRes.ok) {
+        const started = (await startRes.json()) as WeixinLoginStatus;
+        setWeixinStatus(started);
+      }
+    } finally {
+      setWeixinAutoStarting(false);
+    }
+  };
+
+  // Step 3 auto-flow: when weixin is enabled, auto start login and keep polling.
+  useEffect(() => {
+    if (step !== 3) return;
+    if (channels["openclaw-weixin"]?.enabled === false) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      while (!cancelled) {
+        try {
+          const stRes = await fetch("/api/weixin-login/status");
+          if (stRes.ok) {
+            const st = (await stRes.json()) as WeixinLoginStatus;
+            if (!cancelled) setWeixinStatus(st);
+            if (isWeixinBound(st)) return;
+
+            // Not running and not configured: auto trigger (or retrigger) login.
+            if (!st.running && st.exitCode !== 0 && !weixinAutoStarting) {
+              await triggerWeixinLogin(false);
+            }
+          }
+        } catch {
+          // keep retrying quietly in onboarding
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, channels, weixinAutoStarting]);
+
+  useEffect(() => {
+    if (weixinStatus?.qrUrl) {
+      setWeixinQrLoadFailed(false);
+      setWeixinQrNonce(Date.now());
+    }
+  }, [weixinStatus?.qrUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const qrText = (weixinStatus?.qrUrl || "").trim();
+    if (!qrText) {
+      setWeixinQrDataUrl(null);
+      return;
+    }
+    // Weixin returns an H5 link (not a direct image). Generate a local QR image from the link.
+    void QRCode.toDataURL(qrText, {
+      width: 256,
+      margin: 1,
+      errorCorrectionLevel: "M",
+      color: { dark: "#000000", light: "#FFFFFF" },
+    })
+      .then((dataUrl: string) => {
+        if (!cancelled) setWeixinQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setWeixinQrDataUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [weixinStatus?.qrUrl]);
 
   const handleValidateAndNext = async () => {
     if (!apiKey.trim()) {
       setError("请输入 API Key");
+      return;
+    }
+    if (isMaskedApiKeyEcho(apiKey.trim())) {
+      setError(null);
+      setStep(3);
       return;
     }
 
@@ -121,6 +262,31 @@ export function Onboarding() {
       sendRpc("secrets.reload", {});
 
       await new Promise((r) => setTimeout(r, 500));
+
+      const weixinEnabled = channels["openclaw-weixin"]?.enabled !== false;
+      if (!skipChannels && weixinEnabled) {
+        // Poll login status: weixin auto-start already runs in step 3 effect.
+        for (let i = 0; i < 180; i += 1) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const stRes = await fetch("/api/weixin-login/status");
+          if (!stRes.ok) continue;
+          const st = (await stRes.json()) as WeixinLoginStatus;
+          setWeixinStatus(st);
+          if (isWeixinBound(st)) break;
+          if (!st.running && st.exitCode !== null) {
+            throw new Error(st.error || "微信绑定未完成，请重试");
+          }
+        }
+
+        const finalRes = await fetch("/api/weixin-login/status");
+        if (finalRes.ok) {
+          const finalState = (await finalRes.json()) as WeixinLoginStatus;
+          setWeixinStatus(finalState);
+          if (!isWeixinBound(finalState)) {
+            throw new Error("微信绑定超时，请扫码后重试");
+          }
+        }
+      }
 
       setStep(4);
 
@@ -251,6 +417,92 @@ export function Onboarding() {
             <p className="mb-6 text-sm text-gray-500">连接后可在聊天软件中直接使用 AI</p>
 
             <div className="space-y-3">
+              {/* WeChat (first) */}
+              <ChannelCard
+                name="微信"
+                icon={<WeChatIcon className="h-6 w-6 shrink-0 text-green-500" />}
+                badge="推荐优先配置"
+                expanded={expandedChannel === "openclaw-weixin"}
+                onToggle={() =>
+                  setExpandedChannel(
+                    expandedChannel === "openclaw-weixin" ? null : "openclaw-weixin",
+                  )
+                }
+              >
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={channels["openclaw-weixin"]?.enabled !== false}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      toggleChannel("openclaw-weixin", "enabled", enabled);
+                      if (!enabled) {
+                        // Hide QR immediately when disabled.
+                        setWeixinStatus(null);
+                        setWeixinQrLoadFailed(false);
+                      } else {
+                        // Re-enable: force refresh QR session immediately.
+                        setWeixinStatus(null);
+                        setWeixinQrLoadFailed(false);
+                        void triggerWeixinLogin(true);
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  启用微信 ClawBot（点击完成设置后自动弹出扫码绑定）
+                </label>
+                {(channels["openclaw-weixin"]?.enabled !== false) &&
+                  (weixinAutoStarting ||
+                    Boolean(weixinStatus?.running) ||
+                    Boolean(weixinStatus?.qrUrl) ||
+                    Boolean(weixinStatus?.error)) && (
+                  <div className="mt-3 rounded-lg border border-gray-300 bg-white p-3 text-xs text-black">
+                    <div className="mb-1 font-medium">微信二维码</div>
+                    <div className="rounded border border-gray-300 bg-white p-2">
+                      {weixinStatus?.qrUrl ? (
+                        <div className="relative h-48 w-48">
+                          <img
+                            src={weixinQrDataUrl || `/api/weixin-login/qrcode?v=${weixinQrNonce}`}
+                            alt="微信登录二维码"
+                            className={`h-48 w-48 border border-gray-300 bg-white object-contain ${
+                              isWeixinBound(weixinStatus) ? "blur-sm" : ""
+                            }`}
+                            loading="lazy"
+                            onError={() => setWeixinQrLoadFailed(true)}
+                          />
+                          {isWeixinBound(weixinStatus) && (
+                            <div className="absolute inset-0 flex items-center justify-center rounded border border-gray-300 bg-white/80">
+                              <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
+                                已绑定，二维码已遮蔽
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex h-48 w-48 items-center justify-center border border-gray-300 bg-white text-gray-500">
+                          获取绑定二维码中...
+                        </div>
+                      )}
+                    </div>
+                    {weixinQrLoadFailed && (
+                      <p className="mt-2 text-red-600">二维码图片加载失败，正在自动重试...</p>
+                    )}
+                    <p className="mt-2 text-black">
+                      状态：
+                      {isWeixinBound(weixinStatus)
+                        ? "已绑定"
+                        : weixinAutoStarting
+                          ? "获取绑定二维码中..."
+                          : weixinStatus?.running
+                            ? "等待扫码确认..."
+                            : weixinStatus?.error
+                              ? `获取失败：${weixinStatus.error}`
+                              : "获取绑定二维码中..."}
+                    </p>
+                  </div>
+                  )}
+              </ChannelCard>
+
               {/* Feishu */}
               <ChannelCard
                 name="飞书"
@@ -319,28 +571,6 @@ export function Onboarding() {
                 </a>
               </ChannelCard>
 
-              {/* WeChat */}
-              <ChannelCard
-                name="微信"
-                icon={<WeChatIcon className="h-6 w-6 shrink-0 text-green-500" />}
-                badge="实验性功能"
-                expanded={expandedChannel === "openclaw-weixin"}
-                onToggle={() =>
-                  setExpandedChannel(
-                    expandedChannel === "openclaw-weixin" ? null : "openclaw-weixin",
-                  )
-                }
-              >
-                <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={channels["openclaw-weixin"]?.enabled ?? false}
-                    onChange={(e) => toggleChannel("openclaw-weixin", "enabled", e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  启用微信 ClawBot（需在 OpenClaw 控制台扫码配对）
-                </label>
-              </ChannelCard>
             </div>
 
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
@@ -355,10 +585,19 @@ export function Onboarding() {
               </button>
               <button
                 onClick={() => void handleFinish(false)}
-                disabled={saving}
+                disabled={
+                  saving ||
+                  ((channels["openclaw-weixin"]?.enabled !== false) && !isWeixinBound(weixinStatus))
+                }
                 className="flex-1 rounded-xl bg-indigo-600 py-3 font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
               >
-                {saving ? "保存中..." : "完成设置"}
+                {saving
+                  ? "处理中..."
+                  : (channels["openclaw-weixin"]?.enabled !== false) && !isWeixinBound(weixinStatus)
+                    ? "请先完成微信扫码绑定"
+                  : channels["openclaw-weixin"]?.enabled !== false
+                    ? "微信已绑定，完成设置"
+                    : "完成设置"}
               </button>
             </div>
           </div>

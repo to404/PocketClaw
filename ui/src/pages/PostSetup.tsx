@@ -190,13 +190,6 @@ export function PostSetup() {
           </div>
         </div>
 
-        {/* Hint when gateway is online but Control UI may not be built */}
-        {gatewayStatus === "online" && (
-          <p className="mb-2 text-center text-xs text-gray-400">
-            如果 AI 界面显示 &quot;Control UI assets not found&quot;，请通过一键更新获取最新版本
-          </p>
-        )}
-
         {/* Actions */}
         <div className="space-y-3">
           <a
@@ -246,7 +239,6 @@ export function PostSetup() {
           </Link>
         </div>
 
-        {/* Update checker */}
         <div className="mt-8">
           <UpdateChecker />
         </div>

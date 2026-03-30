@@ -63,15 +63,43 @@ export function Channels() {
         {loading && <p className="text-sm text-gray-500">加载中...</p>}
 
         {!loading && channels.length === 0 && (
-          <div className="rounded-xl border-2 border-dashed border-gray-200 p-8 text-center dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">暂无已配置的聊天平台</p>
-            <p className="mt-2 text-xs text-gray-400">
-              前往{" "}
-              <Link to="/settings" className="text-indigo-600 hover:underline dark:text-indigo-400">
-                设置
-              </Link>{" "}
-              配置飞书、QQ 或微信
-            </p>
+          <div className="space-y-4">
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400">暂无已连接的聊天平台</p>
+              <p className="mt-2 text-xs text-gray-400">
+                在{" "}
+                <Link to="/settings" className="text-indigo-600 hover:underline dark:text-indigo-400">
+                  设置 → 频道接入
+                </Link>{" "}
+                中配置后，连接状态会显示在这里。
+              </p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                各平台如何接入
+              </h3>
+              <ul className="space-y-4 text-xs text-gray-600 dark:text-gray-400">
+                <li>
+                  <span className="font-medium text-gray-800 dark:text-gray-200">飞书 / QQ</span>
+                  ：在设置「频道接入」中展开对应卡片，填写开放平台上的 App ID 与 Secret，保存即可（详见项目内{" "}
+                  <code className="rounded bg-gray-100 px-1 dark:bg-gray-700">docs/channels.md</code>
+                  ）。
+                </li>
+                <li>
+                  <span className="font-medium text-gray-800 dark:text-gray-200">微信（ClawBot）</span>
+                  ：需已安装 <code className="rounded bg-gray-100 px-1 dark:bg-gray-700">@tencent-weixin/openclaw-weixin</code>（完整 setup 或发行包已包含）。随后在「频道接入」里找到「微信」卡片，点击「启用」保存；然后打开{" "}
+                  <a
+                    href="http://localhost:18789"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    OpenClaw 控制台
+                  </a>{" "}
+                  （默认端口 18789），在频道管理中选择微信 ClawBot，用微信扫码完成配对。无需公网 IP，也无需像飞书那样填网页凭证。
+                </li>
+              </ul>
+            </div>
           </div>
         )}
 
