@@ -188,7 +188,7 @@ jobs:
           chmod +x portable/启动PocketClaw.command
 
           cd portable
-          zip -r "../PocketClaw-v${VERSION}-mac.zip" . \
+          zip -r "../小龙虾U盘便携版-v${VERSION}-mac.zip" . \
             -x "data/.openclaw/credentials/*" \
             -x "data/memory/*.md" \
             -x "data/backups/*" \
@@ -197,7 +197,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-mac
-          path: PocketClaw-*.zip
+          path: 小龙虾U盘便携版-*.zip
 
   build-windows:
     needs: check-version
@@ -331,7 +331,7 @@ jobs:
           rm -f portable/Windows-Start.bat portable/Windows-Menu.bat 2>/dev/null || true
 
           cd portable
-          7z a -r "../PocketClaw-v${VERSION}-windows.zip" . \
+          7z a -r "../小龙虾U盘便携版-v${VERSION}-windows.zip" . \
             -x!data/.openclaw/credentials \
             -x!data/memory/*.md \
             -x!data/backups/* \
@@ -340,7 +340,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows
-          path: PocketClaw-*.zip
+          path: 小龙虾U盘便携版-*.zip
 
   release:
     needs: [check-version, build-mac, build-windows]
@@ -356,7 +356,7 @@ jobs:
 
       - name: Generate checksums
         run: |
-          sha256sum PocketClaw-*.zip > SHA256SUMS.txt
+          sha256sum 小龙虾U盘便携版-*.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create tag and release
@@ -374,7 +374,7 @@ jobs:
           gh release create "$VERSION" \
             --title "OpenClawU盘便携版 $VERSION" \
             --generate-notes \
-            PocketClaw-*.zip SHA256SUMS.txt
+            小龙虾U盘便携版-*.zip SHA256SUMS.txt
 
       - name: Upload to Aliyun OSS (China mirror)
         continue-on-error: true
@@ -409,7 +409,7 @@ jobs:
             -k "${OSS_KEY_SECRET}"
 
           # Upload each file
-          for file in PocketClaw-*.zip SHA256SUMS.txt; do
+          for file in 小龙虾U盘便携版-*.zip SHA256SUMS.txt; do
             SIZE=$(du -h "$file" | cut -f1)
             echo "Uploading $file (${SIZE}) to oss://${BUCKET}/v${VERSION}/${file}..."
             "$OSSUTIL" cp "$file" "oss://${BUCKET}/v${VERSION}/${file}" -f

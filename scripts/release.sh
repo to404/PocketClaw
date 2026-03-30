@@ -11,7 +11,7 @@ log() { echo "[Release] $*"; }
 
 log "=== OpenClawU盘便携版 Release v${VERSION} ==="
 
-FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.tar.gz"
+FULL_PACKAGE="$RELEASE_DIR/小龙虾U盘便携版-v${VERSION}-full.zip"
 
 if [ ! -f "$FULL_PACKAGE" ]; then
     log "Build artifacts not found, building first..."

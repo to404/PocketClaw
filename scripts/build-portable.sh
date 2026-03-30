@@ -54,7 +54,7 @@ fi
 log "Step 5: Packaging..."
 mkdir -p "$RELEASE_DIR"
 
-FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.zip"
+FULL_PACKAGE="$RELEASE_DIR/小龙虾U盘便携版-v${VERSION}-full.zip"
 
 log "Creating full package..."
 cd "$PROJECT_ROOT"
