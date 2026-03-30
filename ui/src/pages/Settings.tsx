@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
+import QRCode from "qrcode";
 import { useConfig } from "../hooks/useConfig";
 import { useGatewayConnection } from "../hooks/GatewayContext";
 import { useTheme } from "../hooks/useTheme";
@@ -78,6 +79,17 @@ const CHANNEL_DEFS: ChannelDef[] = [
 ];
 
 type ChannelPluginsStatus = { qqbot: boolean; openclawWeixin: boolean } | null;
+type WeixinLoginStatus = {
+  running: boolean;
+  configured: boolean;
+  accountCount: number;
+  qrUrl: string | null;
+  error: string | null;
+  exitCode: number | null;
+};
+
+const isWeixinBound = (st: WeixinLoginStatus | null) =>
+  Boolean(st && (st.configured || st.exitCode === 0));
 
 interface ChannelCardProps {
   channel: ChannelDef;
@@ -94,6 +106,9 @@ function ChannelCard({ channel, config, onSave, saving, channelPlugins }: Channe
   ];
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
+  const [weixinStatus, setWeixinStatus] = useState<WeixinLoginStatus | null>(null);
+  const [weixinBinding, setWeixinBinding] = useState(false);
+  const [weixinQrcodeDataUrl, setWeixinQrcodeDataUrl] = useState<string | null>(null);
 
   const isConfigured = (() => {
     if (!channelCfg) return false;
@@ -124,6 +139,110 @@ function ChannelCard({ channel, config, onSave, saving, channelPlugins }: Channe
     }
     setFieldValues({});
   };
+
+  const startWeixinBinding = async (force: boolean) => {
+    if (channel.id !== "openclaw-weixin") return;
+    if (!isConfigured) {
+      showToast("请先点击“启用”并保存微信频道", "error");
+      return;
+    }
+    setWeixinBinding(true);
+    try {
+      const res = await fetch("/api/weixin-login/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      if (!res.ok) {
+        throw new Error("启动绑定失败");
+      }
+      const st = (await res.json()) as WeixinLoginStatus;
+      setWeixinStatus(st);
+    } catch {
+      setWeixinBinding(false);
+      showToast("启动微信绑定失败", "error");
+    }
+  };
+
+  useEffect(() => {
+    if (channel.id !== "openclaw-weixin") return;
+    if (!isConfigured) return;
+    let cancelled = false;
+    void fetch("/api/weixin-login/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((st: WeixinLoginStatus | null) => {
+        if (!cancelled && st) setWeixinStatus(st);
+      })
+      .catch(() => {
+        // ignore initial status fetch errors
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [channel.id, isConfigured]);
+
+  useEffect(() => {
+    if (channel.id !== "openclaw-weixin") return;
+    if (!weixinBinding) return;
+    let cancelled = false;
+    const run = async () => {
+      while (!cancelled) {
+        try {
+          const stRes = await fetch("/api/weixin-login/status");
+          if (stRes.ok) {
+            const st = (await stRes.json()) as WeixinLoginStatus;
+            if (!cancelled) setWeixinStatus(st);
+            if (isWeixinBound(st)) {
+              if (!cancelled) {
+                setWeixinBinding(false);
+                showToast("微信已绑定", "success");
+              }
+              return;
+            }
+            if (!st.running && st.exitCode !== null && st.exitCode !== 0) {
+              if (!cancelled) {
+                setWeixinBinding(false);
+                showToast(st.error || "微信绑定未完成，请重试", "error");
+              }
+              return;
+            }
+          }
+        } catch {
+          // keep polling quietly while binding
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [channel.id, weixinBinding]);
+
+  useEffect(() => {
+    if (channel.id !== "openclaw-weixin") return;
+    const qrText = (weixinStatus?.qrUrl || "").trim();
+    let cancelled = false;
+    if (!qrText) {
+      setWeixinQrcodeDataUrl(null);
+      return;
+    }
+    void QRCode.toDataURL(qrText, {
+      width: 220,
+      margin: 1,
+      errorCorrectionLevel: "M",
+      color: { dark: "#000000", light: "#FFFFFF" },
+    })
+      .then((dataUrl: string) => {
+        if (!cancelled) setWeixinQrcodeDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setWeixinQrcodeDataUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [channel.id, weixinStatus?.qrUrl]);
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
@@ -241,19 +360,31 @@ function ChannelCard({ channel, config, onSave, saving, channelPlugins }: Channe
 
       {/* Footer: Save + tutorial link */}
       <div className="mt-3 flex items-center justify-between">
-        <button
-          onClick={handleSave}
-          disabled={(!hasInput && channel.fields.length > 0) || saving}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
-        >
-          {saving
-            ? "..."
-            : channel.fields.length === 0
-              ? isConfigured
-                ? "已启用"
-                : "启用"
-              : "保存"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSave}
+            disabled={(!hasInput && channel.fields.length > 0) || saving}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
+          >
+            {saving
+              ? "..."
+              : channel.fields.length === 0
+                ? isConfigured
+                  ? "已启用"
+                  : "启用"
+                : "保存"}
+          </button>
+          {channel.id === "openclaw-weixin" && (
+            <button
+              type="button"
+              onClick={() => void startWeixinBinding(isWeixinBound(weixinStatus))}
+              disabled={!isConfigured || weixinBinding}
+              className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-40 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
+            >
+              {weixinBinding ? "绑定中..." : isWeixinBound(weixinStatus) ? "重新绑定微信" : "绑定微信"}
+            </button>
+          )}
+        </div>
         {channel.tutorialUrl && (
           <a
             href={channel.tutorialUrl}
@@ -265,6 +396,47 @@ function ChannelCard({ channel, config, onSave, saving, channelPlugins }: Channe
           </a>
         )}
       </div>
+      {channel.id === "openclaw-weixin" &&
+        (weixinBinding ||
+          isWeixinBound(weixinStatus) ||
+          Boolean(weixinStatus?.qrUrl) ||
+          Boolean(weixinStatus?.error)) && (
+          <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900/40">
+            <p className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">微信绑定</p>
+            {weixinQrcodeDataUrl ? (
+              <div className="relative w-fit">
+                <img
+                  src={weixinQrcodeDataUrl}
+                  alt="微信绑定二维码"
+                  className={`h-44 w-44 rounded border border-gray-300 bg-white object-contain ${
+                    isWeixinBound(weixinStatus) ? "blur-sm" : ""
+                  }`}
+                />
+                {isWeixinBound(weixinStatus) && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded bg-white/80">
+                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                      已绑定，二维码已遮蔽
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex h-44 w-44 items-center justify-center rounded border border-gray-300 bg-white text-xs text-gray-500">
+                {weixinBinding ? "获取二维码中..." : "点击“绑定微信”开始"}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              状态：
+              {isWeixinBound(weixinStatus)
+                ? "已绑定"
+                : weixinBinding
+                  ? "等待扫码确认..."
+                  : weixinStatus?.error
+                    ? `失败：${weixinStatus.error}`
+                    : "未开始"}
+            </p>
+          </div>
+        )}
     </div>
   );
 }

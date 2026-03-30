@@ -499,6 +499,18 @@ export function Onboarding() {
                               ? `获取失败：${weixinStatus.error}`
                               : "获取绑定二维码中..."}
                     </p>
+                    {isWeixinBound(weixinStatus) && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => void triggerWeixinLogin(true)}
+                          disabled={weixinAutoStarting}
+                          className="rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-40"
+                        >
+                          {weixinAutoStarting ? "重新绑定中..." : "重新绑定微信"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                   )}
               </ChannelCard>
