@@ -59,7 +59,12 @@ FULL_PACKAGE="$RELEASE_DIR/PocketClaw-v${VERSION}-full.zip"
 log "Creating full package..."
 cd "$PROJECT_ROOT"
 zip -r "$FULL_PACKAGE" portable/ \
+    -x 'portable/data/pocketclaw.log' \
+    -x 'portable/data/.openclaw/openclaw.json' \
+    -x 'portable/data/.openclaw/openclaw.json.bak' \
     -x 'portable/data/.openclaw/credentials*' \
+    -x 'portable/data/.openclaw/workspace/*' \
+    -x 'portable/data/.openclaw/.openclaw/*' \
     -x 'portable/data/memory/*.md' \
     -x 'portable/data/backups/*'
 
